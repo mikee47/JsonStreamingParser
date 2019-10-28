@@ -27,22 +27,22 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 #include <stdint.h>
 
-class JsonListener
+namespace JSON
+{
+class Listener
 {
 public:
 	virtual void startDocument() = 0;
-
-	virtual void onKey(const char* key, unsigned length) = 0;
-
-	virtual void onValue(const char* value, unsigned length) = 0;
-
-	virtual void endArray() = 0;
-
-	virtual void endObject() = 0;
-
 	virtual void endDocument() = 0;
 
-	virtual void startArray() = 0;
+	virtual void onKey(const char* key, unsigned length) = 0;
+	virtual void onValue(const char* value, unsigned length) = 0;
 
 	virtual void startObject() = 0;
+	virtual void endObject() = 0;
+
+	virtual void startArray() = 0;
+	virtual void endArray() = 0;
 };
+
+} // namespace JSON

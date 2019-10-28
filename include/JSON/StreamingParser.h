@@ -25,28 +25,21 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 #pragma once
 
-#include "JsonListener.h"
+#include "Listener.h"
+#include "Error.h"
+#include "Stack.h"
 #include <string.h>
-#include <assert.h>
 
-class JsonStreamingParser
+namespace JSON
+{
+class StreamingParser
 {
 public:
-	JsonStreamingParser(JsonListener& listener) : listener(listener)
-	{
-		reset();
-	}
-
-	void parse(char c);
-	void setListener(JsonListener* listener);
-	void reset();
-
-private:
 	enum class State {
 		START_DOCUMENT,
 		DONE,
-		IN_ARRAY,
 		IN_OBJECT,
+		IN_ARRAY,
 		END_KEY,
 		AFTER_KEY,
 		IN_STRING,
@@ -60,19 +53,37 @@ private:
 		UNICODE_SURROGATE,
 	};
 
-	enum class Obj {
+	enum class Item {
 		OBJECT,
 		ARRAY,
 		KEY,
 		STRING,
 	};
 
-	void bufferChar(char c)
+	StreamingParser(Listener& listener) : listener(listener)
 	{
-		if(bufferPos < BUFFER_MAX_LENGTH - 1) {
-			buffer[bufferPos] = c;
-			++bufferPos;
+		reset();
+	}
+
+	Error parse(char c);
+	Error parse(const char* data, unsigned length);
+	void reset();
+
+	State getState() const
+	{
+		return state;
+	}
+
+private:
+	Error bufferChar(char c)
+	{
+		if(bufferPos >= BUFFER_MAX_LENGTH - 1) {
+			return Error::BufferFull;
 		}
+
+		buffer[bufferPos] = c;
+		++bufferPos;
+		return Error::Ok;
 	}
 
 	void sendKey()
@@ -91,61 +102,63 @@ private:
 		bufferPos = 0;
 	}
 
-	void endArray();
+	Error endArray();
 
-	void startValue(char c);
+	Error startValue(char c);
 
-	void processEscapeCharacters(char c);
+	Error processEscapeCharacters(char c);
 
 	char convertCodepointToCharacter(uint16_t num);
 
-	void endUnicodeCharacter(uint16_t codepoint);
+	Error endUnicodeCharacter(uint16_t codepoint);
 
-	void startObject();
-
-	void startArray();
-
-	void endDocument();
-
-	void endUnicodeSurrogateInterstitial();
-
-	bool doesCharArrayContain(const char myArray[], unsigned length, char c)
+	Error startObject()
 	{
-		return memchr(myArray, c, length) != nullptr;
+		listener.startObject();
+		state = State::IN_OBJECT;
+		return stackPush(Item::OBJECT);
+	}
+
+	Error startArray()
+	{
+		listener.startArray();
+		state = State::IN_ARRAY;
+		return stackPush(Item::ARRAY);
+	}
+
+	void endDocument()
+	{
+		listener.endDocument();
+		state = State::DONE;
+	}
+
+	Error endUnicodeSurrogateInterstitial();
+
+	bool bufferContains(char c)
+	{
+		return memchr(buffer, c, bufferPos) != nullptr;
 	}
 
 	unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
 
-	void processUnicodeCharacter(char c);
+	Error processUnicodeCharacter(char c);
 
-	void endObject();
+	Error endObject();
 
-	void push(Obj obj)
+	Error stackPush(Item obj)
 	{
-		assert(stackPos < stackSize - 1);
-		stack[stackPos] = obj;
-		++stackPos;
+		return stack.push(obj) ? Error::Ok : Error::StackFull;
 	}
 
-	Obj peek()
+	unsigned getNestingLevel() const
 	{
-		assert(stackPos > 0);
-		return stack[stackPos - 1];
-	}
-
-	Obj pop()
-	{
-		assert(stackPos > 0);
-		--stackPos;
-		return stack[stackPos];
+		return stack.getLevel();
 	}
 
 private:
-	JsonListener& listener;
+	Listener& listener;
 	State state = State::START_DOCUMENT;
-	static constexpr unsigned stackSize = 20;
-	Obj stack[stackSize];
-	uint8_t stackPos = 0;
+	Stack<Item, 20> stack;
 
 	bool doEmitWhitespace = false;
 	// fixed length buffer array to prepare for c code
@@ -158,6 +171,7 @@ private:
 
 	char unicodeBuffer[10];
 	uint8_t unicodeBufferPos = 0;
-	uint8_t characterCounter = 0;
 	int unicodeHighSurrogate = 0;
 };
+
+} // namespace JSON
