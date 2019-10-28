@@ -25,109 +25,139 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 #pragma once
 
-#include <Arduino.h>
 #include "JsonListener.h"
-
-#define STATE_START_DOCUMENT 0
-#define STATE_DONE -1
-#define STATE_IN_ARRAY 1
-#define STATE_IN_OBJECT 2
-#define STATE_END_KEY 3
-#define STATE_AFTER_KEY 4
-#define STATE_IN_STRING 5
-#define STATE_START_ESCAPE 6
-#define STATE_UNICODE 7
-#define STATE_IN_NUMBER 8
-#define STATE_IN_TRUE 9
-#define STATE_IN_FALSE 10
-#define STATE_IN_NULL 11
-#define STATE_AFTER_VALUE 12
-#define STATE_UNICODE_SURROGATE 13
-
-#define STACK_OBJECT 0
-#define STACK_ARRAY 1
-#define STACK_KEY 2
-#define STACK_STRING 3
-
-#define BUFFER_MAX_LENGTH 512
+#include <string.h>
+#include <assert.h>
 
 class JsonStreamingParser
 {
 public:
-	JsonStreamingParser();
+	JsonStreamingParser(JsonListener& listener) : listener(listener)
+	{
+		reset();
+	}
+
 	void parse(char c);
 	void setListener(JsonListener* listener);
 	void reset();
 
 private:
-	void increaseBufferPointer();
+	enum class State {
+		START_DOCUMENT,
+		DONE,
+		IN_ARRAY,
+		IN_OBJECT,
+		END_KEY,
+		AFTER_KEY,
+		IN_STRING,
+		START_ESCAPE,
+		UNICODE,
+		IN_NUMBER,
+		IN_TRUE,
+		IN_FALSE,
+		IN_NULL,
+		AFTER_VALUE,
+		UNICODE_SURROGATE,
+	};
 
-	void endString();
+	enum class Obj {
+		OBJECT,
+		ARRAY,
+		KEY,
+		STRING,
+	};
+
+	void bufferChar(char c)
+	{
+		if(bufferPos < BUFFER_MAX_LENGTH - 1) {
+			buffer[bufferPos] = c;
+			++bufferPos;
+		}
+	}
+
+	void sendKey()
+	{
+		buffer[bufferPos] = '\0';
+		listener.onKey(buffer, bufferPos);
+		state = State::END_KEY;
+		bufferPos = 0;
+	}
+
+	void sendValue()
+	{
+		buffer[bufferPos] = '\0';
+		listener.onValue(buffer, bufferPos);
+		state = State::AFTER_VALUE;
+		bufferPos = 0;
+	}
 
 	void endArray();
 
 	void startValue(char c);
 
-	void startKey();
-
 	void processEscapeCharacters(char c);
 
-	boolean isDigit(char c);
+	char convertCodepointToCharacter(uint16_t num);
 
-	boolean isHexCharacter(char c);
-
-	char convertCodepointToCharacter(int num);
-
-	void endUnicodeCharacter(int codepoint);
-
-	void startNumber(char c);
-
-	void startString();
+	void endUnicodeCharacter(uint16_t codepoint);
 
 	void startObject();
 
 	void startArray();
 
-	void endNull();
-
-	void endFalse();
-
-	void endTrue();
-
 	void endDocument();
-
-	int convertDecimalBufferToInt(char myArray[], int length);
-
-	void endNumber();
 
 	void endUnicodeSurrogateInterstitial();
 
-	boolean doesCharArrayContain(char myArray[], int length, char c);
+	bool doesCharArrayContain(const char myArray[], unsigned length, char c)
+	{
+		return memchr(myArray, c, length) != nullptr;
+	}
 
-	int getHexArrayAsDecimal(char hexArray[], int length);
+	unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
 
 	void processUnicodeCharacter(char c);
 
 	void endObject();
 
-private:
-	int state;
-	int stack[20];
-	int stackPos = 0;
-	JsonListener* myListener;
+	void push(Obj obj)
+	{
+		assert(stackPos < stackSize - 1);
+		stack[stackPos] = obj;
+		++stackPos;
+	}
 
-	boolean doEmitWhitespace = false;
+	Obj peek()
+	{
+		assert(stackPos > 0);
+		return stack[stackPos - 1];
+	}
+
+	Obj pop()
+	{
+		assert(stackPos > 0);
+		--stackPos;
+		return stack[stackPos];
+	}
+
+private:
+	JsonListener& listener;
+	State state = State::START_DOCUMENT;
+	static constexpr unsigned stackSize = 20;
+	Obj stack[stackSize];
+	uint8_t stackPos = 0;
+
+	bool doEmitWhitespace = false;
 	// fixed length buffer array to prepare for c code
+	static constexpr uint16_t BUFFER_MAX_LENGTH = 512;
 	char buffer[BUFFER_MAX_LENGTH];
-	int bufferPos = 0;
+	uint16_t bufferPos = 0;
 
 	char unicodeEscapeBuffer[10];
-	int unicodeEscapeBufferPos = 0;
+	uint8_t unicodeEscapeBufferPos = 0;
 
 	char unicodeBuffer[10];
-	int unicodeBufferPos = 0;
-
-	int characterCounter = 0;
-
+	uint8_t unicodeBufferPos = 0;
+	uint8_t characterCounter = 0;
 	int unicodeHighSurrogate = 0;
 };

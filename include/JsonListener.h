@@ -25,18 +25,16 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
 class JsonListener
 {
 public:
-	virtual void whitespace(char c) = 0;
-
 	virtual void startDocument() = 0;
 
-	virtual void key(const String& key) = 0;
+	virtual void onKey(const char* key, unsigned length) = 0;
 
-	virtual void value(const String& value) = 0;
+	virtual void onValue(const char* value, unsigned length) = 0;
 
 	virtual void endArray() = 0;
 
