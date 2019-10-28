@@ -28,108 +28,106 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #include <Arduino.h>
 #include "JsonListener.h"
 
-#define STATE_START_DOCUMENT     0
-#define STATE_DONE               -1
-#define STATE_IN_ARRAY           1
-#define STATE_IN_OBJECT          2
-#define STATE_END_KEY            3
-#define STATE_AFTER_KEY          4
-#define STATE_IN_STRING          5
-#define STATE_START_ESCAPE       6
-#define STATE_UNICODE            7
-#define STATE_IN_NUMBER          8
-#define STATE_IN_TRUE            9
-#define STATE_IN_FALSE           10
-#define STATE_IN_NULL            11
-#define STATE_AFTER_VALUE        12
-#define STATE_UNICODE_SURROGATE  13
+#define STATE_START_DOCUMENT 0
+#define STATE_DONE -1
+#define STATE_IN_ARRAY 1
+#define STATE_IN_OBJECT 2
+#define STATE_END_KEY 3
+#define STATE_AFTER_KEY 4
+#define STATE_IN_STRING 5
+#define STATE_START_ESCAPE 6
+#define STATE_UNICODE 7
+#define STATE_IN_NUMBER 8
+#define STATE_IN_TRUE 9
+#define STATE_IN_FALSE 10
+#define STATE_IN_NULL 11
+#define STATE_AFTER_VALUE 12
+#define STATE_UNICODE_SURROGATE 13
 
-#define STACK_OBJECT             0
-#define STACK_ARRAY              1
-#define STACK_KEY                2
-#define STACK_STRING             3
+#define STACK_OBJECT 0
+#define STACK_ARRAY 1
+#define STACK_KEY 2
+#define STACK_STRING 3
 
-#define BUFFER_MAX_LENGTH  512
+#define BUFFER_MAX_LENGTH 512
 
-class JsonStreamingParser {
-  private:
+class JsonStreamingParser
+{
+public:
+	JsonStreamingParser();
+	void parse(char c);
+	void setListener(JsonListener* listener);
+	void reset();
 
+private:
+	void increaseBufferPointer();
 
-    int state;
-    int stack[20];
-    int stackPos = 0;
-    JsonListener* myListener;
+	void endString();
 
-    boolean doEmitWhitespace = false;
-    // fixed length buffer array to prepare for c code
-    char buffer[BUFFER_MAX_LENGTH];
-    int bufferPos = 0;
+	void endArray();
 
-    char unicodeEscapeBuffer[10];
-    int unicodeEscapeBufferPos = 0;
+	void startValue(char c);
 
-    char unicodeBuffer[10];
-    int unicodeBufferPos = 0;
+	void startKey();
 
-    int characterCounter = 0;
+	void processEscapeCharacters(char c);
 
-    int unicodeHighSurrogate = 0;
+	boolean isDigit(char c);
 
-    void increaseBufferPointer();
+	boolean isHexCharacter(char c);
 
-    void endString();
+	char convertCodepointToCharacter(int num);
 
-    void endArray();
+	void endUnicodeCharacter(int codepoint);
 
-    void startValue(char c);
+	void startNumber(char c);
 
-    void startKey();
+	void startString();
 
-    void processEscapeCharacters(char c);
+	void startObject();
 
-    boolean isDigit(char c);
+	void startArray();
 
-    boolean isHexCharacter(char c);
+	void endNull();
 
-    char convertCodepointToCharacter(int num);
+	void endFalse();
 
-    void endUnicodeCharacter(int codepoint);
+	void endTrue();
 
-    void startNumber(char c);
+	void endDocument();
 
-    void startString();
+	int convertDecimalBufferToInt(char myArray[], int length);
 
-    void startObject();
+	void endNumber();
 
-    void startArray();
+	void endUnicodeSurrogateInterstitial();
 
-    void endNull();
+	boolean doesCharArrayContain(char myArray[], int length, char c);
 
-    void endFalse();
+	int getHexArrayAsDecimal(char hexArray[], int length);
 
-    void endTrue();
+	void processUnicodeCharacter(char c);
 
-    void endDocument();
+	void endObject();
 
-    int convertDecimalBufferToInt(char myArray[], int length);
+private:
+	int state;
+	int stack[20];
+	int stackPos = 0;
+	JsonListener* myListener;
 
-    void endNumber();
+	boolean doEmitWhitespace = false;
+	// fixed length buffer array to prepare for c code
+	char buffer[BUFFER_MAX_LENGTH];
+	int bufferPos = 0;
 
-    void endUnicodeSurrogateInterstitial();
+	char unicodeEscapeBuffer[10];
+	int unicodeEscapeBufferPos = 0;
 
-    boolean doesCharArrayContain(char myArray[], int length, char c);
+	char unicodeBuffer[10];
+	int unicodeBufferPos = 0;
 
-    int getHexArrayAsDecimal(char hexArray[], int length);
+	int characterCounter = 0;
 
-    void processUnicodeCharacter(char c);
-
-    void endObject();
-
-
-
-  public:
-    JsonStreamingParser();
-    void parse(char c);
-    void setListener(JsonListener* listener);
-    void reset();
+	int unicodeHighSurrogate = 0;
 };
