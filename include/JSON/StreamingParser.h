@@ -405,21 +405,21 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::Type type)
 {
 	buffer[bufferPos] = '\0';
-	auto level = stack.getLevel();
-	Container container = {true, 0};
-	if(level > 0) {
+	Element elem;
+	elem.type = type;
+	elem.level = stack.getLevel();
+	if(elem.level > 0) {
 		auto& c = stack.peek();
+		elem.container = c;
 		++c.index;
-		container = c;
 	}
-	Element elem(container, type, level);
 	elem.key = buffer;
 	elem.keyLength = keyLength;
 	elem.value = &buffer[keyLength + 1];
 	elem.valueLength = bufferPos - keyLength - 1;
 	listener.startElement(elem);
 	state = State::AFTER_VALUE;
-	elem.keyLength = 0;
+	keyLength = 0;
 	bufferPos = 0;
 }
 

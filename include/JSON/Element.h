@@ -26,6 +26,7 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #pragma once
 
 #include <WString.h>
+#include <type_traits>
 
 namespace JSON
 {
@@ -41,33 +42,43 @@ static_assert(sizeof(Container) == 1);
 
 struct Element {
 	enum class Type : uint8_t {
-		Object,
-		Array,
 		Null,
 		True,
 		False,
 		Number,
 		String,
+		Object,
+		Array,
 	};
 
 	Container container = {true, 0};
-	Type type;
+	Type type = Type::Null;
 	uint8_t level = 0; ///< Nesting level
 	const char* key = nullptr;
 	const char* value = nullptr;
 	uint16_t keyLength = 0;
 	uint16_t valueLength = 0;
 
-	Element(Container container, Type type, unsigned level) : container(container), type(type), level(level)
-	{
-	}
-
 	String getKey() const
 	{
 		return String(key, keyLength);
 	}
 
-	const char* getValue() const
+	bool keyIs(const char* key, unsigned length)
+	{
+		if(length == keyLength) {
+			return memcmp(this->key, key, length) == 0;
+		} else {
+			return false;
+		}
+	}
+
+	bool keyIs(const char* key)
+	{
+		return keyIs(key, strlen(key));
+	}
+
+	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const
 	{
 		switch(type) {
 		case Type::Null:
@@ -85,14 +96,69 @@ struct Element {
 		}
 	}
 
-	String getValueString() const
+	template <typename T> inline typename std::enable_if<std::is_same<T, String>::value, T>::type as() const
 	{
 		switch(type) {
 		case Type::Number:
 		case Type::String:
 			return String(value, valueLength);
 		default:
-			return getValue();
+			return as<const char*>();
+		}
+	}
+
+	template <typename T> inline typename std::enable_if<std::is_integral<T>::value, T>::type as() const
+	{
+		switch(type) {
+		case Type::Null:
+		case Type::Object:
+		case Type::Array:
+			return 0;
+		case Type::True:
+			return 1;
+		case Type::False:
+			return 0;
+		case Type::Number:
+		case Type::String:
+		default:
+			return value ? atoi(value) : 0;
+		}
+	}
+
+	template <typename T> inline typename std::enable_if<std::is_floating_point<T>::value, T>::type as() const
+	{
+		switch(type) {
+		case Type::Null:
+		case Type::Object:
+		case Type::Array:
+			return 0;
+		case Type::True:
+			return 1;
+		case Type::False:
+			return 0;
+		case Type::Number:
+		case Type::String:
+		default:
+			return value ? atof(value) : 0;
+		}
+	}
+
+	template <typename T> inline typename std::enable_if<std::is_same<T, bool>::value, T>::type as() const
+	{
+		switch(type) {
+		case Type::Null:
+		case Type::Object:
+		case Type::Array:
+			return false;
+		case Type::True:
+			return true;
+		case Type::False:
+			return false;
+		case Type::Number:
+			return as<int>() != 0;
+		case Type::String:
+		default:
+			return valueLength != 0;
 		}
 	}
 };
