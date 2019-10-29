@@ -30,7 +30,7 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 namespace JSON
 {
 struct Element {
-	enum class Type {
+	enum class Type : uint8_t {
 		Document,
 		Object,
 		Array,
@@ -41,8 +41,10 @@ struct Element {
 		String,
 	};
 
+	Type container = Type::Document;
 	Type type;
-	uint8_t level; ///< Nesting level
+	uint8_t level = 0; ///< Nesting level
+	uint8_t index = 0; ///< Item index
 	const char* key = nullptr;
 	const char* value = nullptr;
 	uint16_t keyLength = 0;

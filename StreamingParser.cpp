@@ -141,8 +141,7 @@ Error StreamingParser::parse(char c)
 		}
 
 	case State::AFTER_VALUE:
-		switch(stack.peek()) {
-		case Item::OBJECT:
+		if(stack.peek().isObject) {
 			if(c == '}') {
 				return endObject();
 			} else if(c == ',') {
@@ -152,8 +151,7 @@ Error StreamingParser::parse(char c)
 				// Expected ',' or '}'
 				return Error::CommaOrClosingBraceExpected;
 			}
-
-		case Item::ARRAY:
+		} else {
 			if(c == ']') {
 				return endArray();
 			} else if(c == ',') {
@@ -163,10 +161,6 @@ Error StreamingParser::parse(char c)
 				// Expected ',' or ']' while parsing array
 				return Error::CommaOrClosingBracketExpected;
 			}
-
-		default:
-			// Finished a literal, but unclear what state to move to
-			return Error::InternalError;
 		}
 
 	case State::IN_NUMBER:
@@ -312,8 +306,7 @@ Error StreamingParser::startValue(char c)
 
 Error StreamingParser::endArray()
 {
-	auto popped = stack.pop();
-	if(popped != Item::ARRAY) {
+	if(stack.pop().isObject) {
 		// "Unexpected end of array encountered.");
 		return Error::NotInArray;
 	}
@@ -329,8 +322,7 @@ Error StreamingParser::endArray()
 
 Error StreamingParser::endObject()
 {
-	auto popped = stack.pop();
-	if(popped != Item::OBJECT) {
+	if(!stack.pop().isObject) {
 		// Unexpected end of object encountered
 		return Error::NotInObject;
 	}

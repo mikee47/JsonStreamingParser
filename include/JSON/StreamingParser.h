@@ -54,11 +54,6 @@ public:
 		UNICODE_SURROGATE,
 	};
 
-	enum class Item {
-		OBJECT,
-		ARRAY,
-	};
-
 	StreamingParser(Listener& listener) : listener(listener)
 	{
 		reset();
@@ -97,7 +92,17 @@ private:
 	void startElement(Element::Type type)
 	{
 		buffer[bufferPos] = '\0';
-		Element elem(type, stack.getLevel());
+		auto level = stack.getLevel();
+		Element elem(type, level);
+		if(level > 0) {
+			auto& item = stack.peek();
+			elem.index = item.index;
+			elem.container = item.isObject ? Element::Type::Object : Element::Type::Array;
+			++item.index;
+		} else {
+			elem.container = Element::Type::Document;
+			elem.index = 0;
+		}
 		elem.key = buffer;
 		elem.keyLength = keyLength;
 		elem.value = &buffer[keyLength + 1];
@@ -127,14 +132,14 @@ private:
 	{
 		startElement(Element::Type::Object);
 		state = State::IN_OBJECT;
-		return stackPush(Item::OBJECT);
+		return stack.push({true, 0}) ? Error::Ok : Error::StackFull;
 	}
 
 	Error startArray()
 	{
 		startElement(Element::Type::Array);
 		state = State::IN_ARRAY;
-		return stackPush(Item::ARRAY);
+		return stack.push({false, 0}) ? Error::Ok : Error::StackFull;
 	}
 
 	void endDocument()
@@ -156,20 +161,15 @@ private:
 
 	Error endObject();
 
-	Error stackPush(Item obj)
-	{
-		return stack.push(obj) ? Error::Ok : Error::StackFull;
-	}
-
 private:
 	struct StackItem {
-		Item item;
-		uint8_t index;
+		uint8_t isObject : 1; ///< Can only be an object or an array
+		uint8_t index : 7;	///< Counts child items
 	};
 
 	Listener& listener;
 	State state = State::START_DOCUMENT;
-	Stack<Item, 20> stack;
+	Stack<StackItem, 20> stack;
 
 	bool doEmitWhitespace = false;
 	static constexpr uint16_t BUFFER_MAX_LENGTH = 512;
