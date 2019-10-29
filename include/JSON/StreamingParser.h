@@ -26,7 +26,7 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #pragma once
 
 #include "Listener.h"
-#include "Error.h"
+#include "Status.h"
 #include "Stack.h"
 #include <string.h>
 #include <ctype.h>
@@ -69,7 +69,7 @@ public:
 		reset();
 	}
 
-	Error parse(const char* data, unsigned length);
+	Status parse(const char* data, unsigned length);
 	void reset();
 
 	State getState() const
@@ -77,13 +77,8 @@ public:
 		return state;
 	}
 
-	bool done() const
-	{
-		return state == State::END_DOCUMENT;
-	}
-
 private:
-	Error parse(char c);
+	Status parse(char c);
 
 	// valid whitespace characters in JSON (from RFC4627 for JSON) include:
 	// space, horizontal tab, line feed or new line, and carriage return.
@@ -94,15 +89,15 @@ private:
 		return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
 	}
 
-	Error bufferChar(char c)
+	Status bufferChar(char c)
 	{
 		if(bufferPos >= BUFSIZE - 1) {
-			return Error::BufferFull;
+			return Status::BufferFull;
 		}
 
 		buffer[bufferPos] = c;
 		++bufferPos;
-		return Error::Ok;
+		return Status::Ok;
 	}
 
 	void startElement(Element::Type type);
@@ -112,31 +107,31 @@ private:
 		listener.endElement(type, stack.getLevel());
 	}
 
-	Error endArray();
+	Status endArray();
 
-	Error startValue(char c);
+	Status startValue(char c);
 
-	Error processEscapeCharacters(char c);
+	Status processEscapeCharacters(char c);
 
 	static char convertCodepointToCharacter(uint16_t num);
 
-	Error endUnicodeCharacter(uint16_t codepoint);
+	Status endUnicodeCharacter(uint16_t codepoint);
 
-	Error startObject()
+	Status startObject()
 	{
 		startElement(Element::Type::Object);
 		state = State::IN_OBJECT;
-		return stack.push({true, 0}) ? Error::Ok : Error::StackFull;
+		return stack.push({true, 0}) ? Status::Ok : Status::StackFull;
 	}
 
-	Error startArray()
+	Status startArray()
 	{
 		startElement(Element::Type::Array);
 		state = State::IN_ARRAY;
-		return stack.push({false, 0}) ? Error::Ok : Error::StackFull;
+		return stack.push({false, 0}) ? Status::Ok : Status::StackFull;
 	}
 
-	Error endUnicodeSurrogateInterstitial();
+	Status endUnicodeSurrogateInterstitial();
 
 	bool bufferContains(char c)
 	{
@@ -145,9 +140,9 @@ private:
 
 	static unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
 
-	Error processUnicodeCharacter(char c);
+	Status processUnicodeCharacter(char c);
 
-	Error endObject();
+	Status endObject();
 
 private:
 	Listener& listener;
@@ -178,30 +173,27 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::reset()
 	unicodeBufferPos = 0;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(const char* data, unsigned length)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(const char* data, unsigned length)
 {
-	while(length != 0 && state != State::END_DOCUMENT) {
-		auto err = parse(*data++);
+	while(length != 0) {
+		auto status = parse(*data++);
 		--length;
-		if(err != Error::Ok) {
-			state = State::END_DOCUMENT;
-			return err;
+		if(status != Status::Ok) {
+			return status;
 		}
 	}
 
-	return Error::Ok;
+	return Status::Ok;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 {
 	switch(state) {
 	case State::IN_KEY:
 	case State::IN_STRING:
 		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		}
-
-		if(c == '"') {
+			return Status::Ok;
+		} else if(c == '"') {
 			if(state == State::IN_KEY) {
 				keyLength = bufferPos;
 				buffer[bufferPos] = '\0';
@@ -210,28 +202,22 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 			} else {
 				startElement(Element::Type::String);
 			}
-			return Error::Ok;
-		}
-
-		if(c == '\\') {
+			return Status::Ok;
+		} else if(c == '\\') {
 			state = State::START_ESCAPE;
-			return Error::Ok;
-		}
-
-		if((c < 0x1f) || (c == 0x7f)) {
+			return Status::Ok;
+		} else if((c < 0x1f) || (c == 0x7f)) {
 			// Unescaped control character encountered
-			return Error::UnescapedControl;
+			return Status::UnescapedControl;
+		} else {
+			bufferChar(c);
+			return Status::Ok;
 		}
-
-		bufferChar(c);
-		return Error::Ok;
 
 	case State::IN_ARRAY:
 		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		}
-
-		if(c == ']') {
+			return Status::Ok;
+		} else if(c == ']') {
 			return endArray();
 		} else {
 			return startValue(c);
@@ -239,46 +225,40 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 
 	case State::IN_OBJECT:
 		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		}
-
-		if(c == '}') {
+			return Status::Ok;
+		} else if(c == '}') {
 			return endObject();
-		}
-
-		if(c == '"') {
+		} else if(c == '"') {
 			state = State::IN_KEY;
-			return Error::Ok;
+			return Status::Ok;
+		} else {
+			// Start of string expected for object key
+			return Status::StringStartExpected;
 		}
-
-		// Start of string expected for object key
-		return Error::StringStartExpected;
 
 	case State::END_KEY:
-		if(c != ':') {
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else if(c != ':') {
 			// Expected ':' after key
-			return Error::ColonExpected;
+			return Status::ColonExpected;
 		} else {
 			state = State::AFTER_KEY;
-			return Error::Ok;
+			return Status::Ok;
 		}
 
 	case State::AFTER_KEY:
-		return startValue(c);
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else {
+			return startValue(c);
+		}
 
 	case State::START_ESCAPE:
-		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		} else {
-			return processEscapeCharacters(c);
-		}
+		return processEscapeCharacters(c);
 
 	case State::UNICODE:
-		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		} else {
-			return processUnicodeCharacter(c);
-		}
+		return processUnicodeCharacter(c);
 
 	case State::UNICODE_SURROGATE:
 		unicodeEscapeBuffer[unicodeEscapeBufferPos] = c;
@@ -286,137 +266,143 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 		if(unicodeEscapeBufferPos == 2) {
 			return endUnicodeSurrogateInterstitial();
 		} else {
-			return Error::Ok;
+			return Status::Ok;
 		}
 
 	case State::AFTER_VALUE:
-		if(stack.peek().isObject) {
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else if(stack.peek().isObject) {
 			if(c == '}') {
 				return endObject();
 			} else if(c == ',') {
 				state = State::IN_OBJECT;
-				return Error::Ok;
+				return Status::Ok;
 			} else {
 				// Expected ',' or '}'
-				return Error::CommaOrClosingBraceExpected;
+				return Status::CommaOrClosingBraceExpected;
 			}
 		} else {
 			if(c == ']') {
 				return endArray();
 			} else if(c == ',') {
 				state = State::IN_ARRAY;
-				return Error::Ok;
+				return Status::Ok;
 			} else {
 				// Expected ',' or ']' while parsing array
-				return Error::CommaOrClosingBracketExpected;
+				return Status::CommaOrClosingBracketExpected;
 			}
 		}
 
 	case State::IN_NUMBER:
-		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		}
-
 		if(c >= '0' && c <= '9') {
 			return bufferChar(c);
-		}
-
-		if(c == '.') {
+		} else if(c == '.') {
 			if(bufferContains('.')) {
 				// Cannot have multiple decimal points in a number
-				return Error::MultipleDecimalPoints;
+				return Status::MultipleDecimalPoints;
 			} else if(bufferContains('e')) {
 				// Cannot have a decimal point in an exponent
-				return Error::DecimalPointInExponent;
+				return Status::DecimalPointInExponent;
 			} else {
 				return bufferChar(c);
 			}
-		}
-
-		if(c == 'e' || c == 'E') {
+		} else if(c == 'e' || c == 'E') {
 			if(bufferContains('e')) {
 				// Cannot have multiple exponents in a number
-				return Error::MultipleExponents;
+				return Status::MultipleExponents;
 			} else {
 				return bufferChar(c);
 			}
-		}
-
-		if(c == '+' || c == '-') {
+		} else if(c == '+' || c == '-') {
 			char last = buffer[bufferPos - 1];
 			if(last != 'e' && last != 'E') {
 				// Can only have '+' or '-' after the 'e' or 'E' in a number
-				return Error::BadExponent;
+				return Status::BadExponent;
 			} else {
 				return bufferChar(c);
 			}
+		} else {
+			//float result = 0.0;
+			//if (doesCharArrayContain(buffer, bufferPos, '.')) {
+			//  result = value.toFloat();
+			//} else {
+			// needed special treatment in php, maybe not in Java and c
+			//  result = value.toFloat();
+			//}
+			startElement(Element::Type::Number);
+			// we have consumed one beyond the end of the number
+			return parse(c);
 		}
-
-		//float result = 0.0;
-		//if (doesCharArrayContain(buffer, bufferPos, '.')) {
-		//  result = value.toFloat();
-		//} else {
-		// needed special treatment in php, maybe not in Java and c
-		//  result = value.toFloat();
-		//}
-		startElement(Element::Type::Number);
-		// we have consumed one beyond the end of the number
-		return parse(c);
 
 	case State::IN_TRUE:
-		bufferChar(c);
-		if(bufferPos == 4) {
-			if(memcmp(buffer, "true", 4) != 0) {
-				return Error::TrueExpected;
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else {
+			bufferChar(c);
+			if(bufferPos == 4) {
+				if(memcmp(buffer, "true", 4) != 0) {
+					return Status::TrueExpected;
+				}
+				startElement(Element::Type::True);
 			}
-			startElement(Element::Type::True);
+			return Status::Ok;
 		}
-		return Error::Ok;
 
 	case State::IN_FALSE:
-		bufferChar(c);
-		if(bufferPos == 5) {
-			if(memcmp(buffer, "false", 5) != 0) {
-				return Error::FalseExpected;
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else {
+			bufferChar(c);
+			if(bufferPos == 5) {
+				if(memcmp(buffer, "false", 5) != 0) {
+					return Status::FalseExpected;
+				}
+				startElement(Element::Type::False);
 			}
-			startElement(Element::Type::False);
+			return Status::Ok;
 		}
-		return Error::Ok;
 
 	case State::IN_NULL:
-		bufferChar(c);
-		if(bufferPos == 4) {
-			if(memcmp(buffer, "null", 4) != 0) {
-				return Error::NullExpected;
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else {
+			bufferChar(c);
+			if(bufferPos == 4) {
+				if(memcmp(buffer, "null", 4) != 0) {
+					return Status::NullExpected;
+				}
+				startElement(Element::Type::Null);
 			}
-			startElement(Element::Type::Null);
+			return Status::Ok;
 		}
-		return Error::Ok;
 
 	case State::START_DOCUMENT:
 		if(isWhiteSpace(c)) {
-			return Error::Ok;
-		}
-
-		if(c == '[') {
+			return Status::Ok;
+		} else if(c == '[') {
 			return startArray();
 		} else if(c == '{') {
 			return startObject();
 		} else {
 			// Document must start with object or array
-			return Error::OpeningBraceExpected;
+			return Status::OpeningBraceExpected;
 		}
 
 	case State::END_DOCUMENT:
-		return Error::UnexpectedContentAfterDocument;
+		if(isWhiteSpace(c)) {
+			return Status::Ok;
+		} else {
+			return Status::UnexpectedContentAfterDocument;
+		}
 
 	default:
 		// Reached an unknown state
 		assert(false);
-		return Error::InternalError;
+		return Status::InternalError;
 	}
 
-	return Error::Ok;
+	return Status::Ok;
 }
 
 template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::Type type)
@@ -440,7 +426,7 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::T
 	bufferPos = 0;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::startValue(char c)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::startValue(char c)
 {
 	// Add an empty key if one wasn't provided
 	if(bufferPos == 0) {
@@ -454,7 +440,7 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::startValue(char c)
 		return startObject();
 	} else if(c == '"') {
 		state = State::IN_STRING;
-		return Error::Ok;
+		return Status::Ok;
 	} else if(isdigit(c) || c == '-') {
 		state = State::IN_NUMBER;
 		return bufferChar(c);
@@ -469,43 +455,45 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::startValue(char c)
 		return bufferChar(c);
 	} else {
 		// Unexpected character for value
-		return Error::BadValue;
+		return Status::BadValue;
 	}
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endArray()
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::endArray()
 {
 	if(stack.pop().isObject) {
 		// "Unexpected end of array encountered.");
-		return Error::NotInArray;
+		return Status::NotInArray;
 	}
 
 	endElement(Element::Type::Array);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
 		state = State::END_DOCUMENT;
+		return Status::EndOfDocument;
 	}
 
-	return Error::Ok;
+	return Status::Ok;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endObject()
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::endObject()
 {
 	if(!stack.pop().isObject) {
 		// Unexpected end of object encountered
-		return Error::NotInObject;
+		return Status::NotInObject;
 	}
 
 	endElement(Element::Type::Object);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
 		state = State::END_DOCUMENT;
+		return Status::EndOfDocument;
 	}
 
-	return Error::Ok;
+	return Status::Ok;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::processEscapeCharacters(char c)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::processEscapeCharacters(char c)
 {
 	switch(c) {
 	case '"':
@@ -529,10 +517,10 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::processEscapeCharacter
 		break;
 	case 'u':
 		state = State::UNICODE;
-		return Error::Ok;
+		return Status::Ok;
 	default:
 		// Expected escaped character after backslash
-		return Error::BadEscapeChar;
+		return Status::BadEscapeChar;
 	}
 
 	if(state != State::UNICODE) {
@@ -542,11 +530,11 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::processEscapeCharacter
 	return bufferChar(c);
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::processUnicodeCharacter(char c)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::processUnicodeCharacter(char c)
 {
 	if(!isxdigit(c)) {
 		// Expected hex character for escaped Unicode character
-		return Error::HexExpected;
+		return Status::HexExpected;
 	}
 
 	unicodeBuffer[unicodeBufferPos] = c;
@@ -578,7 +566,7 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::processUnicodeCharacte
       }*/
 	}
 
-	return Error::Ok;
+	return Status::Ok;
 }
 
 template <size_t BUFSIZE> unsigned StreamingParser<BUFSIZE>::getHexArrayAsDecimal(char hexArray[], unsigned length)
@@ -590,22 +578,22 @@ template <size_t BUFSIZE> unsigned StreamingParser<BUFSIZE>::getHexArrayAsDecima
 	return result;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endUnicodeSurrogateInterstitial()
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::endUnicodeSurrogateInterstitial()
 {
 	char unicodeEscape = unicodeEscapeBuffer[unicodeEscapeBufferPos - 1];
 	if(unicodeEscape != 'u') {
 		// throw new ParsingError($this->_line_number, $this->_char_number,
 		// "Expected '\\u' following a Unicode high surrogate. Got: " .
 		// $unicode_escape);
-		return Error::BadUnicodeEscapeChar;
+		return Status::BadUnicodeEscapeChar;
 	}
 	unicodeBufferPos = 0;
 	unicodeEscapeBufferPos = 0;
 	state = State::UNICODE;
-	return Error::Ok;
+	return Status::Ok;
 }
 
-template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endUnicodeCharacter(uint16_t codepoint)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::endUnicodeCharacter(uint16_t codepoint)
 {
 	unicodeBufferPos = 0;
 	unicodeHighSurrogate = -1;

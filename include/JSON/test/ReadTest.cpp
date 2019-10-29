@@ -66,15 +66,13 @@ bool readTest(IDataSourceStream& stream)
 	char buffer[64];
 	int len;
 	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
-		auto err = parser.parse(buffer, len);
-		if(err != JSON::Error::Ok) {
-			m_printf("Parser failed: %s\r\n", JSON::getErrorString(err).c_str());
-			return false;
-		}
-		if(parser.done()) {
-			break;
+		auto status = parser.parse(buffer, len);
+		if(status != JSON::Status::Ok) {
+			m_printf("Parser returned '%s'\r\n", JSON::getStatusString(status).c_str());
+			return status == JSON::Status::EndOfDocument;
 		}
 	}
 
-	return true;
+	m_puts("Unexpected end of input\r\n");
+	return false;
 }

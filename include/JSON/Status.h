@@ -2,8 +2,9 @@
 
 #include <WString.h>
 
-#define JSON_ERROR_MAP(XX)                                                                                             \
+#define JSON_STATUS_MAP(XX)                                                                                            \
 	XX(Ok)                                                                                                             \
+	XX(EndOfDocument)                                                                                                  \
 	XX(ColonExpected)                                                                                                  \
 	XX(OpeningBraceExpected)                                                                                           \
 	XX(StringStartExpected)                                                                                            \
@@ -31,12 +32,12 @@
 
 namespace JSON
 {
-enum class Error {
+enum class Status {
 #define XX(t) t,
-	JSON_ERROR_MAP(XX)
+	JSON_STATUS_MAP(XX)
 #undef XX
 };
 
-String getErrorString(Error error);
+String getStatusString(Status status);
 
 } // namespace JSON
