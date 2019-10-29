@@ -29,9 +29,18 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 namespace JSON
 {
+/**
+ * @brief Identifies type and position of item in a parent object or array
+ */
+struct Container {
+	uint8_t isObject : 1; ///< Can only be an object or an array
+	uint8_t index : 7;	///< Counts child items
+};
+
+static_assert(sizeof(Container) == 1);
+
 struct Element {
 	enum class Type : uint8_t {
-		Document,
 		Object,
 		Array,
 		Null,
@@ -41,16 +50,15 @@ struct Element {
 		String,
 	};
 
-	Type container = Type::Document;
+	Container container = {true, 0};
 	Type type;
 	uint8_t level = 0; ///< Nesting level
-	uint8_t index = 0; ///< Item index
 	const char* key = nullptr;
 	const char* value = nullptr;
 	uint16_t keyLength = 0;
 	uint16_t valueLength = 0;
 
-	Element(Type type, unsigned level) : type(type), level(level)
+	Element(Container container, Type type, unsigned level) : container(container), type(type), level(level)
 	{
 	}
 

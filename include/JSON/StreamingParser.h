@@ -142,13 +142,6 @@ private:
 	Error endObject();
 
 private:
-	struct Container {
-		uint8_t isObject : 1; ///< Can only be an object or an array
-		uint8_t index : 7;	///< Counts child items
-	};
-
-	static_assert(sizeof(Container) == 1);
-
 	Listener& listener;
 	State state = State::START_DOCUMENT;
 	Stack<Container, 20> stack;
@@ -413,16 +406,13 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::T
 {
 	buffer[bufferPos] = '\0';
 	auto level = stack.getLevel();
-	Element elem(type, level);
-	if(level == 0) {
-		elem.container = Element::Type::Document;
-		elem.index = 0;
-	} else {
-		auto& item = stack.peek();
-		elem.index = item.index;
-		elem.container = item.isObject ? Element::Type::Object : Element::Type::Array;
-		++item.index;
+	Container container = {true, 0};
+	if(level > 0) {
+		auto& c = stack.peek();
+		++c.index;
+		container = c;
 	}
+	Element elem(container, type, level);
 	elem.key = buffer;
 	elem.keyLength = keyLength;
 	elem.value = &buffer[keyLength + 1];
