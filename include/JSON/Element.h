@@ -38,7 +38,7 @@ struct Container {
 	uint8_t index : 7;	///< Counts child items
 };
 
-static_assert(sizeof(Container) == 1);
+static_assert(sizeof(Container) == 1, "Container size incorrect");
 
 struct Element {
 	enum class Type : uint8_t {
@@ -163,6 +163,6 @@ struct Element {
 	}
 };
 
-static_assert(sizeof(Element) == 16);
+static_assert(sizeof(Element) == 16, "Element size incorrect");
 
 } // namespace JSON

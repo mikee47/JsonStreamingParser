@@ -34,9 +34,17 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 namespace JSON
 {
+/**
+ * @brief Streaming parser
+ * @tparam BUFSIZE Size of buffer must be large enough to contain the longest
+ * key and value strings in the content being parsed.
+ */
 template <size_t BUFSIZE> class StreamingParser
 {
 public:
+	// Arbitrary minimum size
+	static_assert(BUFSIZE >= 32, "StreamingParser buffer needs to be larger");
+
 	enum class State {
 		START_DOCUMENT,
 		END_DOCUMENT,
