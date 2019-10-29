@@ -25,20 +25,70 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 
 #pragma once
 
-#include "Element.h"
+#include <WString.h>
 
 namespace JSON
 {
-class Listener
-{
-public:
-	virtual ~Listener()
+struct Element {
+	enum class Type : uint8_t {
+		Document,
+		Object,
+		Array,
+		Null,
+		True,
+		False,
+		Number,
+		String,
+	};
+
+	Type container = Type::Document;
+	Type type;
+	uint8_t level = 0; ///< Nesting level
+	uint8_t index = 0; ///< Item index
+	const char* key = nullptr;
+	const char* value = nullptr;
+	uint16_t keyLength = 0;
+	uint16_t valueLength = 0;
+
+	Element(Type type, unsigned level) : type(type), level(level)
 	{
 	}
 
-	virtual void startElement(const Element& element) = 0;
+	String getKey() const
+	{
+		return String(key, keyLength);
+	}
 
-	virtual void endElement(Element::Type type, uint8_t level) = 0;
+	const char* getValue() const
+	{
+		switch(type) {
+		case Type::Null:
+		case Type::Object:
+		case Type::Array:
+			return nullptr;
+		case Type::True:
+			return "true";
+		case Type::False:
+			return "false";
+		case Type::Number:
+		case Type::String:
+		default:
+			return value;
+		}
+	}
+
+	String getValueString() const
+	{
+		switch(type) {
+		case Type::Number:
+		case Type::String:
+			return String(value, valueLength);
+		default:
+			return getValue();
+		}
+	}
 };
+
+static_assert(sizeof(Element) == 16);
 
 } // namespace JSON
