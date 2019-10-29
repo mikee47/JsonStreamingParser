@@ -75,6 +75,15 @@ public:
 	}
 
 private:
+	// valid whitespace characters in JSON (from RFC4627 for JSON) include:
+	// space, horizontal tab, line feed or new line, and carriage return.
+	// thanks:
+	// http://stackoverflow.com/questions/16042274/definition-of-whitespace-in-json
+	static bool isWhiteSpace(char c)
+	{
+		return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+	}
+
 	Error bufferChar(char c)
 	{
 		if(bufferPos >= BUFFER_MAX_LENGTH - 1) {
@@ -111,7 +120,7 @@ private:
 
 	Error processEscapeCharacters(char c);
 
-	char convertCodepointToCharacter(uint16_t num);
+	static char convertCodepointToCharacter(uint16_t num);
 
 	Error endUnicodeCharacter(uint16_t codepoint);
 
@@ -142,7 +151,7 @@ private:
 		return memchr(buffer, c, bufferPos) != nullptr;
 	}
 
-	unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
+	static unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
 
 	Error processUnicodeCharacter(char c);
 

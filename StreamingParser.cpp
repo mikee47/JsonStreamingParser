@@ -52,18 +52,12 @@ Error StreamingParser::parse(const char* data, unsigned length)
 
 Error StreamingParser::parse(char c)
 {
-	// valid whitespace characters in JSON (from RFC4627 for JSON) include:
-	// space, horizontal tab, line feed or new line, and carriage return.
-	// thanks:
-	// http://stackoverflow.com/questions/16042274/definition-of-whitespace-in-json
-	if((c == ' ' || c == '\t' || c == '\n' || c == '\r') &&
-	   !(state == State::IN_STRING || state == State::UNICODE || state == State::START_ESCAPE ||
-		 state == State::IN_NUMBER || state == State::START_DOCUMENT)) {
-		return Error::Ok;
-	}
-
 	switch(state) {
 	case State::IN_STRING:
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		}
+
 		if(c == '"') {
 			auto popped = stack.pop();
 			if(popped == Item::KEY) {
@@ -125,10 +119,18 @@ Error StreamingParser::parse(char c)
 		return startValue(c);
 
 	case State::START_ESCAPE:
-		return processEscapeCharacters(c);
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		} else {
+			return processEscapeCharacters(c);
+		}
 
 	case State::UNICODE:
-		return processUnicodeCharacter(c);
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		} else {
+			return processUnicodeCharacter(c);
+		}
 
 	case State::UNICODE_SURROGATE:
 		unicodeEscapeBuffer[unicodeEscapeBufferPos] = c;
@@ -169,18 +171,24 @@ Error StreamingParser::parse(char c)
 		}
 
 	case State::IN_NUMBER:
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		}
+
 		if(c >= '0' && c <= '9') {
-			bufferChar(c);
-		} else if(c == '.') {
+			return bufferChar(c);
+		}
+
+		if(c == '.') {
 			if(bufferContains('.')) {
 				// Cannot have multiple decimal points in a number
 				return Error::MultipleDecimalPoints;
 			} else if(bufferContains('e')) {
 				// Cannot have a decimal point in an exponent
 				return Error::DecimalPointInExponent;
+			} else {
+				return bufferChar(c);
 			}
-
-			return bufferChar(c);
 		}
 
 		if(c == 'e' || c == 'E') {
@@ -244,6 +252,10 @@ Error StreamingParser::parse(char c)
 		return Error::Ok;
 
 	case State::START_DOCUMENT:
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		}
+
 		listener.startElement(Element(Element::Type::Document, 0));
 		if(c == '[') {
 			return startArray();
