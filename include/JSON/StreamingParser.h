@@ -86,20 +86,23 @@ private:
 		return Error::Ok;
 	}
 
-	void sendKey()
+	void startElement(Element::Type type)
 	{
 		buffer[bufferPos] = '\0';
-		listener.onKey(buffer, bufferPos);
-		state = State::END_KEY;
+		Element elem(type, stack.getLevel());
+		elem.key = buffer;
+		elem.keyLength = keyLength;
+		elem.value = &buffer[keyLength + 1];
+		elem.valueLength = bufferPos - keyLength - 1;
+		listener.startElement(elem);
+		state = State::AFTER_VALUE;
+		elem.keyLength = 0;
 		bufferPos = 0;
 	}
 
-	void sendValue()
+	void endElement(Element::Type type)
 	{
-		buffer[bufferPos] = '\0';
-		listener.onValue(buffer, bufferPos);
-		state = State::AFTER_VALUE;
-		bufferPos = 0;
+		listener.endElement(type, stack.getLevel());
 	}
 
 	Error endArray();
@@ -114,21 +117,21 @@ private:
 
 	Error startObject()
 	{
-		listener.startObject();
+		startElement(Element::Type::Object);
 		state = State::IN_OBJECT;
 		return stackPush(Item::OBJECT);
 	}
 
 	Error startArray()
 	{
-		listener.startArray();
+		startElement(Element::Type::Array);
 		state = State::IN_ARRAY;
 		return stackPush(Item::ARRAY);
 	}
 
 	void endDocument()
 	{
-		listener.endDocument();
+		listener.endElement(Element::Type::Document, 0);
 		state = State::DONE;
 	}
 
@@ -150,21 +153,22 @@ private:
 		return stack.push(obj) ? Error::Ok : Error::StackFull;
 	}
 
-	unsigned getNestingLevel() const
-	{
-		return stack.getLevel();
-	}
-
 private:
+	struct StackItem {
+		Item item;
+		uint8_t index;
+	};
+
 	Listener& listener;
 	State state = State::START_DOCUMENT;
 	Stack<Item, 20> stack;
 
 	bool doEmitWhitespace = false;
-	// fixed length buffer array to prepare for c code
 	static constexpr uint16_t BUFFER_MAX_LENGTH = 512;
+	// Buffer contains key, followed by value data
 	char buffer[BUFFER_MAX_LENGTH];
-	uint16_t bufferPos = 0;
+	uint8_t keyLength = 0;
+	uint16_t bufferPos = 0; ///< Current write position in buffer
 
 	char unicodeEscapeBuffer[10];
 	uint8_t unicodeEscapeBufferPos = 0;

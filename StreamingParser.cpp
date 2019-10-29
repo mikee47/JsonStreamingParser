@@ -32,6 +32,7 @@ namespace JSON
 void StreamingParser::reset()
 {
 	state = State::START_DOCUMENT;
+	keyLength = 0;
 	bufferPos = 0;
 	unicodeEscapeBufferPos = 0;
 	unicodeBufferPos = 0;
@@ -66,9 +67,12 @@ Error StreamingParser::parse(char c)
 		if(c == '"') {
 			auto popped = stack.pop();
 			if(popped == Item::KEY) {
-				sendKey();
+				keyLength = bufferPos;
+				buffer[bufferPos] = '\0';
+				++bufferPos;
+				state = State::END_KEY;
 			} else if(popped == Item::STRING) {
-				sendValue();
+				startElement(Element::Type::String);
 			} else {
 				return Error::UnexpectedEndOfString;
 			}
@@ -205,7 +209,7 @@ Error StreamingParser::parse(char c)
 		// needed special treatment in php, maybe not in Java and c
 		//  result = value.toFloat();
 		//}
-		sendValue();
+		startElement(Element::Type::Number);
 		// we have consumed one beyond the end of the number
 		return parse(c);
 
@@ -215,7 +219,7 @@ Error StreamingParser::parse(char c)
 			if(memcmp(buffer, "true", 4) != 0) {
 				return Error::TrueExpected;
 			}
-			sendValue();
+			startElement(Element::Type::True);
 		}
 		return Error::Ok;
 
@@ -225,7 +229,7 @@ Error StreamingParser::parse(char c)
 			if(memcmp(buffer, "false", 5) != 0) {
 				return Error::FalseExpected;
 			}
-			sendValue();
+			startElement(Element::Type::False);
 		}
 		return Error::Ok;
 
@@ -235,12 +239,12 @@ Error StreamingParser::parse(char c)
 			if(memcmp(buffer, "null", 4) != 0) {
 				return Error::NullExpected;
 			}
-			sendValue();
+			startElement(Element::Type::Null);
 		}
 		return Error::Ok;
 
 	case State::START_DOCUMENT:
-		listener.startDocument();
+		listener.startElement(Element(Element::Type::Document, 0));
 		if(c == '[') {
 			return startArray();
 		} else if(c == '{') {
@@ -264,6 +268,12 @@ Error StreamingParser::parse(char c)
 
 Error StreamingParser::startValue(char c)
 {
+	// Add an empty key if one wasn't provided
+	if(bufferPos == 0) {
+		keyLength = 0;
+		buffer[bufferPos++] = '\0';
+	}
+
 	if(c == '[') {
 		return startArray();
 	} else if(c == '{') {
@@ -297,7 +307,7 @@ Error StreamingParser::endArray()
 		return Error::NotInArray;
 	}
 
-	listener.endArray();
+	endElement(Element::Type::Array);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
 		endDocument();
@@ -314,7 +324,7 @@ Error StreamingParser::endObject()
 		return Error::NotInObject;
 	}
 
-	listener.endObject();
+	endElement(Element::Type::Object);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
 		endDocument();
