@@ -61,7 +61,6 @@ public:
 		reset();
 	}
 
-	Error parse(char c);
 	Error parse(const char* data, unsigned length);
 	void reset();
 
@@ -70,7 +69,14 @@ public:
 		return state;
 	}
 
+	bool done() const
+	{
+		return state == State::END_DOCUMENT;
+	}
+
 private:
+	Error parse(char c);
+
 	// valid whitespace characters in JSON (from RFC4627 for JSON) include:
 	// space, horizontal tab, line feed or new line, and carriage return.
 	// thanks:
@@ -122,12 +128,6 @@ private:
 		return stack.push({false, 0}) ? Error::Ok : Error::StackFull;
 	}
 
-	void endDocument()
-	{
-		listener.endElement(Element::Type::Document, 0);
-		state = State::END_DOCUMENT;
-	}
-
 	Error endUnicodeSurrogateInterstitial();
 
 	bool bufferContains(char c)
@@ -142,16 +142,16 @@ private:
 	Error endObject();
 
 private:
-	struct StackItem {
+	struct Container {
 		uint8_t isObject : 1; ///< Can only be an object or an array
 		uint8_t index : 7;	///< Counts child items
 	};
 
-	static_assert(sizeof(StackItem) == 1);
+	static_assert(sizeof(Container) == 1);
 
 	Listener& listener;
 	State state = State::START_DOCUMENT;
-	Stack<StackItem, 20> stack;
+	Stack<Container, 20> stack;
 
 	bool doEmitWhitespace = false;
 	// Buffer contains key, followed by value data
@@ -182,6 +182,7 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(const char* data
 	while(length--) {
 		auto err = parse(*data++);
 		if(err != Error::Ok) {
+			state = State::END_DOCUMENT;
 			return err;
 		}
 	}
@@ -387,7 +388,6 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 			return Error::Ok;
 		}
 
-		listener.startElement(Element(Element::Type::Document, 0));
 		if(c == '[') {
 			return startArray();
 		} else if(c == '{') {
@@ -414,14 +414,14 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::T
 	buffer[bufferPos] = '\0';
 	auto level = stack.getLevel();
 	Element elem(type, level);
-	if(level > 0) {
+	if(level == 0) {
+		elem.container = Element::Type::Document;
+		elem.index = 0;
+	} else {
 		auto& item = stack.peek();
 		elem.index = item.index;
 		elem.container = item.isObject ? Element::Type::Object : Element::Type::Array;
 		++item.index;
-	} else {
-		elem.container = Element::Type::Document;
-		elem.index = 0;
 	}
 	elem.key = buffer;
 	elem.keyLength = keyLength;
@@ -476,7 +476,7 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endArray()
 	endElement(Element::Type::Array);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
-		endDocument();
+		state = State::END_DOCUMENT;
 	}
 
 	return Error::Ok;
@@ -492,7 +492,7 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::endObject()
 	endElement(Element::Type::Object);
 	state = State::AFTER_VALUE;
 	if(stack.isEmpty()) {
-		endDocument();
+		state = State::END_DOCUMENT;
 	}
 
 	return Error::Ok;
