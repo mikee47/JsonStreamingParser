@@ -1,26 +1,31 @@
-/**The MIT License (MIT)
-
-Copyright (c) 2015 by Daniel Eichhorn
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-parser
+/**
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2015 by Daniel Eichhorn
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * 	The above copyright notice and this permission notice shall be included in all
+ * 	copies or substantial portions of the Software.
+ *
+ * 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * 	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * 	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * 	SOFTWARE.
+ *
+ * 	See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-parser
+ *
+ * @author Oct 2019 mikee47 <mike@sillyhouse.net>
+ *
+ * Substantial rewrite and implement as class template
 */
 
 #pragma once
@@ -64,9 +69,19 @@ public:
 		UNICODE_SURROGATE,
 	};
 
-	StreamingParser(Listener& listener) : listener(listener)
+	StreamingParser() = default;
+
+	StreamingParser(Listener& listener) : listener(&listener)
 	{
-		reset();
+	}
+
+	/**
+	 * @brief Set the current listener
+	 * @note Can change this at any time to redirect parsing output
+	 */
+	void setListener(Listener* listener)
+	{
+		this->listener = listener;
 	}
 
 	Status parse(const char* data, unsigned length);
@@ -104,7 +119,9 @@ private:
 
 	void endElement(Element::Type type)
 	{
-		listener.endElement(type, stack.getLevel());
+		if(listener != nullptr) {
+			listener->endElement(type, stack.getLevel());
+		}
 	}
 
 	Status endArray();
@@ -145,7 +162,7 @@ private:
 	Status endObject();
 
 private:
-	Listener& listener;
+	Listener* listener = nullptr;
 	State state = State::START_DOCUMENT;
 	Stack<Container, 20> stack;
 
@@ -407,20 +424,22 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 
 template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::Type type)
 {
-	buffer[bufferPos] = '\0';
-	Element elem;
-	elem.type = type;
-	elem.level = stack.getLevel();
-	if(elem.level > 0) {
-		auto& c = stack.peek();
-		elem.container = c;
-		++c.index;
+	if(listener != nullptr) {
+		buffer[bufferPos] = '\0';
+		Element elem;
+		elem.type = type;
+		elem.level = stack.getLevel();
+		if(elem.level > 0) {
+			auto& c = stack.peek();
+			elem.container = c;
+			++c.index;
+		}
+		elem.key = buffer;
+		elem.keyLength = keyLength;
+		elem.value = &buffer[keyLength + 1];
+		elem.valueLength = bufferPos - keyLength - 1;
+		listener->startElement(elem);
 	}
-	elem.key = buffer;
-	elem.keyLength = keyLength;
-	elem.value = &buffer[keyLength + 1];
-	elem.valueLength = bufferPos - keyLength - 1;
-	listener.startElement(elem);
 	state = State::AFTER_VALUE;
 	keyLength = 0;
 	bufferPos = 0;
