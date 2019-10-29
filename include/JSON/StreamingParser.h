@@ -180,8 +180,9 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::reset()
 
 template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(const char* data, unsigned length)
 {
-	while(length--) {
+	while(length != 0 && state != State::END_DOCUMENT) {
 		auto err = parse(*data++);
+		--length;
 		if(err != Error::Ok) {
 			state = State::END_DOCUMENT;
 			return err;
@@ -226,6 +227,10 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 		return Error::Ok;
 
 	case State::IN_ARRAY:
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		}
+
 		if(c == ']') {
 			return endArray();
 		} else {
@@ -233,6 +238,10 @@ template <size_t BUFSIZE> Error StreamingParser<BUFSIZE>::parse(char c)
 		}
 
 	case State::IN_OBJECT:
+		if(isWhiteSpace(c)) {
+			return Error::Ok;
+		}
+
 		if(c == '}') {
 			return endObject();
 		}

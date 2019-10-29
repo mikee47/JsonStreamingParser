@@ -53,8 +53,13 @@ private:
 	}
 };
 
-void readTest(Stream& stream)
+bool readTest(IDataSourceStream& stream)
 {
+	if(!stream.isValid()) {
+		m_puts("Stream invalid\r\n");
+		return false;
+	}
+
 	TestListener listener;
 	JSON::StreamingParser<128> parser(listener);
 
@@ -63,8 +68,13 @@ void readTest(Stream& stream)
 	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
 		auto err = parser.parse(buffer, len);
 		if(err != JSON::Error::Ok) {
-			m_printf("Parser failed: %s", JSON::getErrorString(err).c_str());
+			m_printf("Parser failed: %s\r\n", JSON::getErrorString(err).c_str());
+			return false;
+		}
+		if(parser.done()) {
 			break;
 		}
 	}
+
+	return true;
 }
