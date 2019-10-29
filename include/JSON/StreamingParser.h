@@ -37,11 +37,12 @@ class StreamingParser
 public:
 	enum class State {
 		START_DOCUMENT,
-		DONE,
-		IN_OBJECT,
-		IN_ARRAY,
+		END_DOCUMENT,
+		IN_KEY,
 		END_KEY,
 		AFTER_KEY,
+		IN_OBJECT,
+		IN_ARRAY,
 		IN_STRING,
 		START_ESCAPE,
 		UNICODE,
@@ -56,8 +57,6 @@ public:
 	enum class Item {
 		OBJECT,
 		ARRAY,
-		KEY,
-		STRING,
 	};
 
 	StreamingParser(Listener& listener) : listener(listener)
@@ -141,7 +140,7 @@ private:
 	void endDocument()
 	{
 		listener.endElement(Element::Type::Document, 0);
-		state = State::DONE;
+		state = State::END_DOCUMENT;
 	}
 
 	Error endUnicodeSurrogateInterstitial();

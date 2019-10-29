@@ -13,7 +13,7 @@ enum class Error {
 	FalseExpected,
 	NullExpected,
 	HexExpected,
-	UnexpectedEndOfDocument,
+	UnexpectedContentAfterDocument,
 	UnexpectedEndOfString,
 	NotInObject,
 	NotInArray,

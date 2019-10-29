@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <assert.h>
 
+/**
+ * @brief Very simple item stack
+ */
 template <typename T, unsigned size> class Stack
 {
 public:
@@ -16,13 +19,13 @@ public:
 		return true;
 	}
 
-	T peek()
+	T& peek()
 	{
 		assert(level > 0);
 		return stack[level - 1];
 	}
 
-	T pop()
+	T& pop()
 	{
 		assert(level > 0);
 		--level;
@@ -39,7 +42,12 @@ public:
 		return level;
 	}
 
+	void clear()
+	{
+		level = 0;
+	}
+
 private:
 	T stack[size];
-	uint8_t level = 0;
+	uint8_t level = 0; ///< Points to next level, so 0 indicates an empty stack
 };

@@ -32,6 +32,7 @@ namespace JSON
 void StreamingParser::reset()
 {
 	state = State::START_DOCUMENT;
+	stack.clear();
 	keyLength = 0;
 	bufferPos = 0;
 	unicodeEscapeBufferPos = 0;
@@ -53,22 +54,20 @@ Error StreamingParser::parse(const char* data, unsigned length)
 Error StreamingParser::parse(char c)
 {
 	switch(state) {
+	case State::IN_KEY:
 	case State::IN_STRING:
 		if(isWhiteSpace(c)) {
 			return Error::Ok;
 		}
 
 		if(c == '"') {
-			auto popped = stack.pop();
-			if(popped == Item::KEY) {
+			if(state == State::IN_KEY) {
 				keyLength = bufferPos;
 				buffer[bufferPos] = '\0';
 				++bufferPos;
 				state = State::END_KEY;
-			} else if(popped == Item::STRING) {
-				startElement(Element::Type::String);
 			} else {
-				return Error::UnexpectedEndOfString;
+				startElement(Element::Type::String);
 			}
 			return Error::Ok;
 		}
@@ -99,8 +98,8 @@ Error StreamingParser::parse(char c)
 		}
 
 		if(c == '"') {
-			state = State::IN_STRING;
-			return stackPush(Item::KEY);
+			state = State::IN_KEY;
+			return Error::Ok;
 		}
 
 		// Start of string expected for object key
@@ -266,8 +265,8 @@ Error StreamingParser::parse(char c)
 			return Error::OpeningBraceExpected;
 		}
 
-	case State::DONE:
-		return Error::UnexpectedEndOfDocument;
+	case State::END_DOCUMENT:
+		return Error::UnexpectedContentAfterDocument;
 
 	default:
 		// Reached an unknown state
@@ -292,7 +291,7 @@ Error StreamingParser::startValue(char c)
 		return startObject();
 	} else if(c == '"') {
 		state = State::IN_STRING;
-		return stackPush(Item::STRING);
+		return Error::Ok;
 	} else if(isdigit(c) || c == '-') {
 		state = State::IN_NUMBER;
 		return bufferChar(c);
