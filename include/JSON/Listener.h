@@ -89,6 +89,8 @@ struct Element {
 	}
 };
 
+static_assert(sizeof(Element) == 16);
+
 class Listener
 {
 public:

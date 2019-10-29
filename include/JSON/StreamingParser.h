@@ -167,6 +167,8 @@ private:
 		uint8_t index : 7;	///< Counts child items
 	};
 
+	static_assert(sizeof(StackItem) == 1);
+
 	Listener& listener;
 	State state = State::START_DOCUMENT;
 	Stack<StackItem, 20> stack;
