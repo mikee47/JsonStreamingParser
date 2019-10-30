@@ -33,6 +33,7 @@
 #include "Listener.h"
 #include "Status.h"
 #include "Stack.h"
+#include <Data/Stream/DataSourceStream.h>
 #include <string.h>
 #include <ctype.h>
 #include <stringutil.h>
@@ -71,7 +72,7 @@ public:
 
 	StreamingParser() = default;
 
-	StreamingParser(Listener& listener) : listener(&listener)
+	StreamingParser(Listener* listener, void* param = nullptr) : listener(listener), param(param)
 	{
 	}
 
@@ -84,7 +85,18 @@ public:
 		this->listener = listener;
 	}
 
+	/**
+	 * @brief Set parameter passed to listener
+	 */
+	void setParam(void* param)
+	{
+		this->param = param;
+	}
+
 	Status parse(const char* data, unsigned length);
+
+	Status parse(IDataSourceStream& stream);
+
 	void reset();
 
 	State getState() const
@@ -115,14 +127,9 @@ private:
 		return Status::Ok;
 	}
 
-	void startElement(Element::Type type);
+	Status startElement(Element::Type type);
 
-	void endElement(Element::Type type)
-	{
-		if(listener != nullptr) {
-			listener->endElement(type, stack.getLevel());
-		}
-	}
+	Status endElement(Element::Type type);
 
 	Status endArray();
 
@@ -136,16 +143,22 @@ private:
 
 	Status startObject()
 	{
-		startElement(Element::Type::Object);
-		state = State::IN_OBJECT;
-		return stack.push({true, 0}) ? Status::Ok : Status::StackFull;
+		auto status = startElement(Element::Type::Object);
+		if(status == Status::Ok) {
+			state = State::IN_OBJECT;
+			status = stack.push({true, 0}) ? Status::Ok : Status::StackFull;
+		}
+		return status;
 	}
 
 	Status startArray()
 	{
-		startElement(Element::Type::Array);
-		state = State::IN_ARRAY;
-		return stack.push({false, 0}) ? Status::Ok : Status::StackFull;
+		auto status = startElement(Element::Type::Array);
+		if(status == Status::Ok) {
+			state = State::IN_ARRAY;
+			status = stack.push({false, 0}) ? Status::Ok : Status::StackFull;
+		}
+		return status;
 	}
 
 	Status endUnicodeSurrogateInterstitial();
@@ -163,6 +176,7 @@ private:
 
 private:
 	Listener* listener = nullptr;
+	void* param = nullptr;
 	State state = State::START_DOCUMENT;
 	Stack<Container, 20> stack;
 
@@ -203,6 +217,24 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(const char* dat
 	return Status::Ok;
 }
 
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(IDataSourceStream& stream)
+{
+	if(!stream.isValid()) {
+		return Status::InvalidStream;
+	}
+
+	char buffer[64];
+	int len;
+	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
+		auto status = parse(buffer, len);
+		if(status != Status::Ok) {
+			return status;
+		}
+	}
+
+	return Status::NoMoreData;
+}
+
 template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 {
 	switch(state) {
@@ -216,10 +248,10 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 				buffer[bufferPos] = '\0';
 				++bufferPos;
 				state = State::END_KEY;
+				return Status::Ok;
 			} else {
-				startElement(Element::Type::String);
+				return startElement(Element::Type::String);
 			}
-			return Status::Ok;
 		} else if(c == '\\') {
 			state = State::START_ESCAPE;
 			return Status::Ok;
@@ -347,29 +379,28 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 			// needed special treatment in php, maybe not in Java and c
 			//  result = value.toFloat();
 			//}
-			startElement(Element::Type::Number);
-			// we have consumed one beyond the end of the number
-			return parse(c);
+			auto status = startElement(Element::Type::Number);
+			if(status == Status::Ok) {
+				// we have consumed one beyond the end of the number
+				status = parse(c);
+			}
+			return status;
 		}
 
 	case State::IN_TRUE:
-		if(isWhiteSpace(c)) {
-			return Status::Ok;
-		} else {
+		if(!isWhiteSpace(c)) {
 			bufferChar(c);
 			if(bufferPos == 4) {
 				if(memcmp(buffer, "true", 4) != 0) {
 					return Status::TrueExpected;
 				}
-				startElement(Element::Type::True);
+				return startElement(Element::Type::True);
 			}
-			return Status::Ok;
 		}
+		return Status::Ok;
 
 	case State::IN_FALSE:
-		if(isWhiteSpace(c)) {
-			return Status::Ok;
-		} else {
+		if(!isWhiteSpace(c)) {
 			bufferChar(c);
 			if(bufferPos == 5) {
 				if(memcmp(buffer, "false", 5) != 0) {
@@ -377,13 +408,11 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 				}
 				startElement(Element::Type::False);
 			}
-			return Status::Ok;
 		}
+		return Status::Ok;
 
 	case State::IN_NULL:
-		if(isWhiteSpace(c)) {
-			return Status::Ok;
-		} else {
+		if(!isWhiteSpace(c)) {
 			bufferChar(c);
 			if(bufferPos == 4) {
 				if(memcmp(buffer, "null", 4) != 0) {
@@ -391,8 +420,8 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 				}
 				startElement(Element::Type::Null);
 			}
-			return Status::Ok;
 		}
+		return Status::Ok;
 
 	case State::START_DOCUMENT:
 		if(isWhiteSpace(c)) {
@@ -422,11 +451,12 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 	return Status::Ok;
 }
 
-template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::Type type)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::startElement(Element::Type type)
 {
 	if(listener != nullptr) {
 		buffer[bufferPos] = '\0';
 		Element elem;
+		elem.param = param;
 		elem.type = type;
 		elem.level = stack.getLevel();
 		if(elem.level > 0) {
@@ -438,11 +468,29 @@ template <size_t BUFSIZE> void StreamingParser<BUFSIZE>::startElement(Element::T
 		elem.keyLength = keyLength;
 		elem.value = &buffer[keyLength + 1];
 		elem.valueLength = bufferPos - keyLength - 1;
-		listener->startElement(elem);
+		if(!listener->startElement(elem)) {
+			return Status::Cancelled;
+		}
 	}
 	state = State::AFTER_VALUE;
 	keyLength = 0;
 	bufferPos = 0;
+	return Status::Ok;
+}
+
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::endElement(Element::Type type)
+{
+	Status status = Status::Ok;
+	if(listener != nullptr) {
+		Element elem;
+		elem.param = param;
+		elem.type = type;
+		elem.level = stack.getLevel();
+		if(!listener->endElement(elem)) {
+			status = Status::Cancelled;
+		}
+	}
+	return status;
 }
 
 template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::startValue(char c)

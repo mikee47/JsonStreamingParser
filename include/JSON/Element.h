@@ -26,6 +26,7 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #pragma once
 
 #include <WString.h>
+#include <FlashString.h>
 #include <type_traits>
 
 namespace JSON
@@ -51,6 +52,7 @@ struct Element {
 		Array,
 	};
 
+	void* param = nullptr;
 	Container container = {true, 0};
 	Type type = Type::Null;
 	uint8_t level = 0; ///< Nesting level
@@ -64,7 +66,12 @@ struct Element {
 		return String(key, keyLength);
 	}
 
-	bool keyIs(const char* key, unsigned length)
+	bool hasKey() const
+	{
+		return keyLength != 0;
+	}
+
+	bool keyIs(const char* key, unsigned length) const
 	{
 		if(length == keyLength) {
 			return memcmp(this->key, key, length) == 0;
@@ -73,9 +80,14 @@ struct Element {
 		}
 	}
 
-	bool keyIs(const char* key)
+	bool keyIs(const char* key) const
 	{
 		return keyIs(key, strlen(key));
+	}
+
+	bool keyIs(const FlashString& key) const
+	{
+		return key.isEqual(this->key, keyLength);
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const
@@ -163,6 +175,6 @@ struct Element {
 	}
 };
 
-static_assert(sizeof(Element) == 16, "Element size incorrect");
+static_assert(sizeof(Element) == 20, "Element size incorrect");
 
 } // namespace JSON

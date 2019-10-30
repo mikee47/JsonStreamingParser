@@ -36,9 +36,9 @@ public:
 	{
 	}
 
-	virtual void startElement(const Element& element) = 0;
+	virtual bool startElement(const Element& element) = 0;
 
-	virtual void endElement(Element::Type type, uint8_t level) = 0;
+	virtual bool endElement(const Element& element) = 0;
 };
 
 } // namespace JSON

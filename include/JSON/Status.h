@@ -5,6 +5,9 @@
 #define JSON_STATUS_MAP(XX)                                                                                            \
 	XX(Ok)                                                                                                             \
 	XX(EndOfDocument)                                                                                                  \
+	XX(Cancelled)                                                                                                      \
+	XX(InvalidStream)                                                                                                  \
+	XX(NoMoreData)                                                                                                     \
 	XX(ColonExpected)                                                                                                  \
 	XX(OpeningBraceExpected)                                                                                           \
 	XX(StringStartExpected)                                                                                            \

@@ -6,7 +6,7 @@ class TestListener : public JSON::Listener
 public:
 	using Element = JSON::Element;
 
-	void startElement(const Element& element) override
+	bool startElement(const Element& element) override
 	{
 		indentLine(element.level);
 		m_puts(element.container.isObject ? "OBJ" : "ARR");
@@ -25,12 +25,14 @@ public:
 		default:
 			m_printf("%s: %s\r\n", element.key, element.value);
 		}
+
+		return true;
 	}
 
-	void endElement(Element::Type type, uint8_t level) override
+	bool endElement(const Element& element) override
 	{
-		indentLine(level);
-		switch(type) {
+		indentLine(element.level);
+		switch(element.type) {
 		case Element::Type::Object:
 			m_puts("}\r\n");
 			break;
@@ -41,6 +43,8 @@ public:
 
 		default:; //
 		}
+
+		return true;
 	}
 
 private:
@@ -55,24 +59,9 @@ private:
 
 bool readTest(IDataSourceStream& stream)
 {
-	if(!stream.isValid()) {
-		m_puts("Stream invalid\r\n");
-		return false;
-	}
-
 	TestListener listener;
-	JSON::StreamingParser<128> parser(listener);
-
-	char buffer[64];
-	int len;
-	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
-		auto status = parser.parse(buffer, len);
-		if(status != JSON::Status::Ok) {
-			m_printf("Parser returned '%s'\r\n", JSON::getStatusString(status).c_str());
-			return status == JSON::Status::EndOfDocument;
-		}
-	}
-
-	m_puts("Unexpected end of input\r\n");
-	return false;
+	JSON::StreamingParser<128> parser(&listener);
+	auto status = parser.parse(stream);
+	m_printf("Parser returned '%s'\r\n", JSON::getStatusString(status).c_str());
+	return status == JSON::Status::EndOfDocument;
 }
