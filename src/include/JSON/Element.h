@@ -26,7 +26,6 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #pragma once
 
 #include <WString.h>
-#include <FlashString.h>
 #include <type_traits>
 
 namespace JSON
@@ -52,14 +51,14 @@ struct Element {
 		Array,
 	};
 
-	void* param = nullptr;
-	Container container = {true, 0};
+	void* param{nullptr};
+	Container container{true, 0};
 	Type type = Type::Null;
-	uint8_t level = 0; ///< Nesting level
-	const char* key = nullptr;
-	const char* value = nullptr;
-	uint16_t keyLength = 0;
-	uint16_t valueLength = 0;
+	uint8_t level{0}; ///< Nesting level
+	const char* key{nullptr};
+	const char* value{nullptr};
+	uint16_t keyLength{0};
+	uint16_t valueLength{0};
 
 	String getKey() const
 	{
@@ -87,7 +86,7 @@ struct Element {
 
 	bool keyIs(const FlashString& key) const
 	{
-		return key.isEqual(this->key, keyLength);
+		return key.equals(this->key, keyLength);
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const

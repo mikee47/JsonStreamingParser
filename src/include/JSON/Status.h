@@ -41,6 +41,6 @@ enum class Status {
 #undef XX
 };
 
-String getStatusString(Status status);
+String toString(Status status);
 
 } // namespace JSON

@@ -1,8 +1,10 @@
 #pragma once
 
-#include <stdint.h>
-#include <assert.h>
+#include <cstdint>
+#include <cassert>
 
+namespace JSON
+{
 /**
  * @brief Very simple item stack
  */
@@ -49,5 +51,7 @@ public:
 
 private:
 	T stack[size];
-	uint8_t level = 0; ///< Points to next level, so 0 indicates an empty stack
+	uint8_t level{0}; ///< Points to next level, so 0 indicates an empty stack
 };
+
+} // namespace JSON

@@ -1,10 +1,21 @@
-#include <Data/Stream/FileStream.h>
+#pragma once
+
+#include <Print.h>
 #include <JSON/StreamingParser.h>
 
-class TestListener : public JSON::Listener
+/**
+ * @brief Listener implementation to output formatted JSON to a stream
+ */
+class BasicListener : public JSON::Listener
 {
 public:
 	using Element = JSON::Element;
+
+	BasicListener(Print& output) : output(output)
+	{
+	}
+
+	/* Listener methods */
 
 	bool startElement(const Element& element) override
 	{
@@ -15,17 +26,19 @@ public:
 		case Element::Type::Object:
 		case Element::Type::Array:
 			if(element.keyLength > 0) {
-				m_nputs(element.key, element.keyLength);
-				m_puts(": ");
+				output.write(element.key, element.keyLength);
+				output.print(": ");
 			}
-			m_putc(element.type == Element::Type::Object ? '{' : '[');
-			m_puts("\r\n");
+			output.println(element.type == Element::Type::Object ? '{' : '[');
 			break;
 
 		default:
-			m_printf("%s: %s\r\n", element.key, element.value);
+			output.print(element.key);
+			output.print(": ");
+			output.println(element.value);
 		}
 
+		// Continue parsing
 		return true;
 	}
 
@@ -34,16 +47,17 @@ public:
 		indentLine(element.level);
 		switch(element.type) {
 		case Element::Type::Object:
-			m_puts("}\r\n");
+			output.println('}');
 			break;
 
 		case Element::Type::Array:
-			m_puts("]\r\n");
+			output.println(']');
 			break;
 
 		default:; //
 		}
 
+		// Continue parsing
 		return true;
 	}
 
@@ -55,13 +69,6 @@ private:
 		memset(ws, ' ', n);
 		m_nputs(ws, n);
 	}
-};
 
-bool readTest(IDataSourceStream& stream)
-{
-	TestListener listener;
-	JSON::StreamingParser<128> parser(&listener);
-	auto status = parser.parse(stream);
-	m_printf("Parser returned '%s'\r\n", JSON::getStatusString(status).c_str());
-	return status == JSON::Status::EndOfDocument;
-}
+	Print& output;
+};

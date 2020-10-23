@@ -33,7 +33,7 @@
 #include "Listener.h"
 #include "Status.h"
 #include "Stack.h"
-#include <Data/Stream/DataSourceStream.h>
+#include <Stream.h>
 #include <string.h>
 #include <ctype.h>
 #include <stringutil.h>
@@ -95,7 +95,7 @@ public:
 
 	Status parse(const char* data, unsigned length);
 
-	Status parse(IDataSourceStream& stream);
+	Status parse(Stream& stream);
 
 	void reset();
 
@@ -217,12 +217,8 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(const char* dat
 	return Status::Ok;
 }
 
-template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(IDataSourceStream& stream)
+template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(Stream& stream)
 {
-	if(!stream.isValid()) {
-		return Status::InvalidStream;
-	}
-
 	char buffer[64];
 	int len;
 	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
