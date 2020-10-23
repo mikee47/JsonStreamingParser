@@ -165,7 +165,7 @@ private:
 
 	bool bufferContains(char c)
 	{
-		return memchr(buffer, c, bufferPos) != nullptr;
+		return memchr(&buffer[keyLength], c, bufferPos - keyLength) != nullptr;
 	}
 
 	static unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
@@ -237,6 +237,7 @@ template <size_t BUFSIZE> Status StreamingParser<BUFSIZE>::parse(char c)
 	case State::IN_KEY:
 	case State::IN_STRING:
 		if(isWhiteSpace(c)) {
+			bufferChar(c);
 			return Status::Ok;
 		} else if(c == '"') {
 			if(state == State::IN_KEY) {
