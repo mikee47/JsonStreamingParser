@@ -26,7 +26,15 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 #pragma once
 
 #include <WString.h>
-#include <type_traits>
+
+#define JSON_ELEMENT_TYPE_MAP(XX)                                                                                      \
+	XX(Null)                                                                                                           \
+	XX(True)                                                                                                           \
+	XX(False)                                                                                                          \
+	XX(Number)                                                                                                         \
+	XX(String)                                                                                                         \
+	XX(Object)                                                                                                         \
+	XX(Array)
 
 namespace JSON
 {
@@ -42,13 +50,9 @@ static_assert(sizeof(Container) == 1, "Container size incorrect");
 
 struct Element {
 	enum class Type : uint8_t {
-		Null,
-		True,
-		False,
-		Number,
-		String,
-		Object,
-		Array,
+#define XX(t) t,
+		JSON_ELEMENT_TYPE_MAP(XX)
+#undef XX
 	};
 
 	void* param{nullptr};
@@ -177,3 +181,5 @@ struct Element {
 static_assert(sizeof(Element) == 20, "Element size incorrect");
 
 } // namespace JSON
+
+String toString(JSON::Element::Type type);

@@ -33,9 +33,7 @@ public:
 			break;
 
 		default:
-			output.print(element.key);
-			output.print(": ");
-			output.println(element.value);
+			output << element.key << ": " << toString(element.type) << " = " << element.value << endl;
 		}
 
 		// Continue parsing

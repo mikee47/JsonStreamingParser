@@ -113,66 +113,67 @@ Status StreamingParser::parse(char c)
 		if(isWhiteSpace(c)) {
 			bufferChar(c);
 			return Status::Ok;
-		} else if(c == '"') {
+		}
+		if(c == '"') {
 			if(state == State::IN_KEY) {
 				keyLength = bufferPos;
 				buffer[bufferPos] = '\0';
 				++bufferPos;
 				state = State::END_KEY;
 				return Status::Ok;
-			} else {
-				return startElement(Element::Type::String);
 			}
-		} else if(c == '\\') {
+			return startElement(Element::Type::String);
+		}
+		if(c == '\\') {
 			state = State::START_ESCAPE;
 			return Status::Ok;
-		} else if((c < 0x1f) || (c == 0x7f)) {
+		}
+		if((c < 0x1f) || (c == 0x7f)) {
 			// Unescaped control character encountered
 			return Status::UnescapedControl;
-		} else {
-			bufferChar(c);
-			return Status::Ok;
 		}
+		bufferChar(c);
+		return Status::Ok;
 
 	case State::IN_ARRAY:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else if(c == ']') {
-			return endArray();
-		} else {
-			return startValue(c);
 		}
+		if(c == ']') {
+			return endArray();
+		}
+		return startValue(c);
 
 	case State::IN_OBJECT:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else if(c == '}') {
+		}
+		if(c == '}') {
 			return endObject();
-		} else if(c == '"') {
+		}
+		if(c == '"') {
 			state = State::IN_KEY;
 			return Status::Ok;
-		} else {
-			// Start of string expected for object key
-			return Status::StringStartExpected;
 		}
+		// Start of string expected for object key
+		return Status::StringStartExpected;
 
 	case State::END_KEY:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else if(c != ':') {
+		}
+		if(c != ':') {
 			// Expected ':' after key
 			return Status::ColonExpected;
-		} else {
-			state = State::AFTER_KEY;
-			return Status::Ok;
 		}
+		state = State::AFTER_KEY;
+		return Status::Ok;
 
 	case State::AFTER_KEY:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else {
-			return startValue(c);
 		}
+		return startValue(c);
 
 	case State::START_ESCAPE:
 		return processEscapeCharacters(c);
@@ -185,78 +186,80 @@ Status StreamingParser::parse(char c)
 		unicodeEscapeBufferPos++;
 		if(unicodeEscapeBufferPos == 2) {
 			return endUnicodeSurrogateInterstitial();
-		} else {
-			return Status::Ok;
 		}
+		return Status::Ok;
 
 	case State::AFTER_VALUE:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else if(stack.peek().isObject) {
+		}
+		if(stack.peek().isObject) {
 			if(c == '}') {
 				return endObject();
-			} else if(c == ',') {
+			}
+			if(c == ',') {
 				state = State::IN_OBJECT;
 				return Status::Ok;
-			} else {
-				// Expected ',' or '}'
-				return Status::CommaOrClosingBraceExpected;
 			}
-		} else {
-			if(c == ']') {
-				return endArray();
-			} else if(c == ',') {
-				state = State::IN_ARRAY;
-				return Status::Ok;
-			} else {
-				// Expected ',' or ']' while parsing array
-				return Status::CommaOrClosingBracketExpected;
-			}
+			// Expected ',' or '}'
+			return Status::CommaOrClosingBraceExpected;
 		}
 
-	case State::IN_NUMBER:
+		if(c == ']') {
+			return endArray();
+		}
+		if(c == ',') {
+			state = State::IN_ARRAY;
+			return Status::Ok;
+		}
+		// Expected ',' or ']' while parsing array
+		return Status::CommaOrClosingBracketExpected;
+
+	case State::IN_NUMBER: {
 		if(c >= '0' && c <= '9') {
 			return bufferChar(c);
-		} else if(c == '.') {
+		}
+		if(c == '.') {
 			if(bufferContains('.')) {
 				// Cannot have multiple decimal points in a number
 				return Status::MultipleDecimalPoints;
-			} else if(bufferContains('e')) {
+			}
+			if(bufferContains('e')) {
 				// Cannot have a decimal point in an exponent
 				return Status::DecimalPointInExponent;
-			} else {
-				return bufferChar(c);
 			}
-		} else if(c == 'e' || c == 'E') {
+			return bufferChar(c);
+		}
+		if(c == 'e' || c == 'E') {
 			if(bufferContains('e')) {
 				// Cannot have multiple exponents in a number
 				return Status::MultipleExponents;
-			} else {
-				return bufferChar(c);
 			}
-		} else if(c == '+' || c == '-') {
+			return bufferChar(c);
+		}
+		if(c == '+' || c == '-') {
 			char last = buffer[bufferPos - 1];
 			if(last != 'e' && last != 'E') {
 				// Can only have '+' or '-' after the 'e' or 'E' in a number
 				return Status::BadExponent;
-			} else {
-				return bufferChar(c);
 			}
-		} else {
-			//float result = 0.0;
-			//if (doesCharArrayContain(buffer, bufferPos, '.')) {
-			//  result = value.toFloat();
-			//} else {
-			// needed special treatment in php, maybe not in Java and c
-			//  result = value.toFloat();
-			//}
-			auto status = startElement(Element::Type::Number);
-			if(status == Status::Ok) {
-				// we have consumed one beyond the end of the number
-				status = parse(c);
-			}
-			return status;
+			return bufferChar(c);
 		}
+
+		//float result = 0.0;
+		//if (doesCharArrayContain(buffer, bufferPos, '.')) {
+		//  result = value.toFloat();
+		//} else {
+		// needed special treatment in php, maybe not in Java and c
+		//  result = value.toFloat();
+		//}
+		auto status = startElement(Element::Type::Number);
+		if(status == Status::Ok) {
+			// we have consumed one beyond the end of the number
+			status = parse(c);
+		}
+		return status;
+	}
 
 	case State::IN_TRUE:
 		if(!isWhiteSpace(c)) {
@@ -297,21 +300,21 @@ Status StreamingParser::parse(char c)
 	case State::START_DOCUMENT:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else if(c == '[') {
-			return startArray();
-		} else if(c == '{') {
-			return startObject();
-		} else {
-			// Document must start with object or array
-			return Status::OpeningBraceExpected;
 		}
+		if(c == '[') {
+			return startArray();
+		}
+		if(c == '{') {
+			return startObject();
+		}
+		// Document must start with object or array
+		return Status::OpeningBraceExpected;
 
 	case State::END_DOCUMENT:
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
-		} else {
-			return Status::UnexpectedContentAfterDocument;
 		}
+		return Status::UnexpectedContentAfterDocument;
 
 	default:
 		// Reached an unknown state
