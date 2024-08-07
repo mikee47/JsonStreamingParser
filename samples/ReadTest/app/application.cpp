@@ -8,7 +8,7 @@ IMPORT_FSTR(testFile, PROJECT_DIR "/files/test.json")
 bool readTest(Stream& input, Print& output)
 {
 	BasicListener listener(output);
-	JSON::StreamingParser<128> parser(&listener);
+	JSON::StaticStreamingParser<128> parser(&listener);
 	auto status = parser.parse(input);
 	debug_i("Parser returned '%s'", JSON::toString(status).c_str());
 	return status == JSON::Status::EndOfDocument;
@@ -21,4 +21,8 @@ void init()
 
 	FSTR::Stream fs(testFile);
 	readTest(fs, Serial);
+
+#ifdef ARCH_HOST
+	System.restart();
+#endif
 }
