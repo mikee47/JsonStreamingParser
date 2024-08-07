@@ -247,40 +247,13 @@ Status StreamingParser::parse(char c)
 	}
 
 	case State::IN_TRUE:
-		if(!isWhiteSpace(c)) {
-			bufferChar(c);
-			if(bufferPos == 4) {
-				if(memcmp(buffer, "true", 4) != 0) {
-					return Status::TrueExpected;
-				}
-				return startElement(Element::Type::True);
-			}
-		}
-		return Status::Ok;
+		return specialValue(c, "true", 4, Element::Type::True, Status::TrueExpected);
 
 	case State::IN_FALSE:
-		if(!isWhiteSpace(c)) {
-			bufferChar(c);
-			if(bufferPos == 5) {
-				if(memcmp(buffer, "false", 5) != 0) {
-					return Status::FalseExpected;
-				}
-				startElement(Element::Type::False);
-			}
-		}
-		return Status::Ok;
+		return specialValue(c, "false", 5, Element::Type::False, Status::FalseExpected);
 
 	case State::IN_NULL:
-		if(!isWhiteSpace(c)) {
-			bufferChar(c);
-			if(bufferPos == 4) {
-				if(memcmp(buffer, "null", 4) != 0) {
-					return Status::NullExpected;
-				}
-				startElement(Element::Type::Null);
-			}
-		}
-		return Status::Ok;
+		return specialValue(c, "null", 4, Element::Type::Null, Status::NullExpected);
 
 	case State::START_DOCUMENT:
 		if(isWhiteSpace(c)) {
@@ -390,6 +363,21 @@ Status StreamingParser::startValue(char c)
 	}
 	// Unexpected character for value
 	return Status::BadValue;
+}
+
+Status StreamingParser::specialValue(char c, const char* tag, uint8_t taglen, Element::Type type, Status fail)
+{
+	if(isWhiteSpace(c)) {
+		return Status::Ok;
+	}
+	bufferChar(c);
+	if(bufferPos < keyLength + 1 + taglen) {
+		return Status::Ok;
+	}
+	if(memcmp(&buffer[keyLength + 1], tag, taglen) == 0) {
+		return startElement(type);
+	}
+	return fail;
 }
 
 Status StreamingParser::endArray()
