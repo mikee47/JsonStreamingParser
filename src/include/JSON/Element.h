@@ -31,6 +31,7 @@ See more at http://blog.squix.ch and https://github.com/squix78/json-streaming-p
 	XX(Null)                                                                                                           \
 	XX(True)                                                                                                           \
 	XX(False)                                                                                                          \
+	XX(Integer)                                                                                                        \
 	XX(Number)                                                                                                         \
 	XX(String)                                                                                                         \
 	XX(Object)                                                                                                         \
@@ -55,14 +56,14 @@ struct Element {
 #undef XX
 	};
 
-	void* param{nullptr};
-	Container container{true, 0};
-	Type type = Type::Null;
-	uint8_t level{0}; ///< Nesting level
-	const char* key{nullptr};
-	const char* value{nullptr};
-	uint16_t keyLength{0};
-	uint16_t valueLength{0};
+	void* param;
+	Container container;
+	Type type;
+	uint8_t level; ///< Nesting level
+	const char* key;
+	const char* value;
+	uint16_t keyLength;
+	uint16_t valueLength;
 
 	String getKey() const
 	{
@@ -78,19 +79,23 @@ struct Element {
 	{
 		if(length == keyLength) {
 			return memcmp(this->key, key, length) == 0;
-		} else {
-			return false;
 		}
+		return false;
 	}
 
 	bool keyIs(const char* key) const
 	{
-		return keyIs(key, strlen(key));
+		return strcmp(this->key, key) == 0;
 	}
 
 	bool keyIs(const FlashString& key) const
 	{
 		return key.equals(this->key, size_t(keyLength));
+	}
+
+	bool isNull() const
+	{
+		return type == Type::Null;
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const
@@ -104,16 +109,18 @@ struct Element {
 			return "true";
 		case Type::False:
 			return "false";
+		case Type::Integer:
 		case Type::Number:
 		case Type::String:
-		default:
 			return value;
 		}
+		return nullptr;
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, String>::value, T>::type as() const
 	{
 		switch(type) {
+		case Type::Integer:
 		case Type::Number:
 		case Type::String:
 			return String(value, valueLength);
@@ -128,16 +135,18 @@ struct Element {
 		case Type::Null:
 		case Type::Object:
 		case Type::Array:
+		case Type::String:
 			return 0;
 		case Type::True:
 			return 1;
 		case Type::False:
 			return 0;
+		case Type::Integer:
+			return atoll(value);
 		case Type::Number:
-		case Type::String:
-		default:
-			return value ? atoll(value) : 0;
+			return atof(value);
 		}
+		return 0;
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_floating_point<T>::value, T>::type as() const
@@ -151,11 +160,12 @@ struct Element {
 			return 1;
 		case Type::False:
 			return 0;
+		case Type::Integer:
 		case Type::Number:
 		case Type::String:
-		default:
 			return value ? atof(value) : 0;
 		}
+		return 0;
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, bool>::value, T>::type as() const
@@ -169,12 +179,14 @@ struct Element {
 			return true;
 		case Type::False:
 			return false;
-		case Type::Number:
+		case Type::Integer:
 			return as<int>() != 0;
+		case Type::Number:
+			return as<float>() != 0.0;
 		case Type::String:
-		default:
 			return valueLength != 0;
 		}
+		return false;
 	}
 };
 

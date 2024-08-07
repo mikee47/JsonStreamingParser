@@ -208,6 +208,30 @@ Status StreamingParser::parse(char c)
 		// Expected ',' or ']' while parsing array
 		return Status::CommaOrClosingBracketExpected;
 
+	case State::IN_INTEGER: {
+		if(isdigit(c)) {
+			return bufferChar(c);
+		}
+		if(c == '.') {
+			state = State::IN_NUMBER;
+			return bufferChar(c);
+		}
+		if(c == 'e' || c == 'E') {
+			state = State::IN_NUMBER;
+			return bufferChar('e');
+		}
+		if(c == '+' || c == '-') {
+			// Not permitted after start of number
+			return Status::BadValue;
+		}
+		auto status = startElement(Element::Type::Integer);
+		if(status == Status::Ok) {
+			// we have consumed one beyond the end of the number
+			status = parse(c);
+		}
+		return status;
+	}
+
 	case State::IN_NUMBER: {
 		if(isdigit(c)) {
 			return bufferChar(c);
@@ -346,7 +370,7 @@ Status StreamingParser::startValue(char c)
 		return Status::Ok;
 	}
 	if(isdigit(c) || c == '-') {
-		state = State::IN_NUMBER;
+		state = State::IN_INTEGER;
 		return bufferChar(c);
 	}
 	if(c == 't') {
