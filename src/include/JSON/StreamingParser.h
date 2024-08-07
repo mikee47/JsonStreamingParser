@@ -34,9 +34,6 @@
 #include "Status.h"
 #include "Stack.h"
 #include <Stream.h>
-#include <string.h>
-#include <ctype.h>
-#include <stringutil.h>
 
 namespace JSON
 {
@@ -72,7 +69,7 @@ public:
 		UNICODE_SURROGATE,
 	};
 
-	StreamingParser(char* buffer, size_t bufsize, Listener* listener, void* param = nullptr)
+	StreamingParser(char* buffer, uint16_t bufsize, Listener* listener, void* param = nullptr)
 		: buffer(buffer), bufsize(bufsize), listener(listener), param(param)
 	{
 	}
@@ -127,6 +124,8 @@ private:
 
 	Status startValue(char c);
 
+	Status specialValue(char c, const char* tag, uint8_t taglen, Element::Type type, Status fail);
+
 	Status processEscapeCharacters(char c);
 
 	static char convertCodepointToCharacter(uint16_t num);
@@ -150,15 +149,14 @@ private:
 private:
 	// Buffer contains key, followed by value data
 	char* buffer;
-	size_t bufsize;
+	uint16_t bufsize;
 
 	Listener* listener = nullptr;
 	void* param = nullptr;
 	State state = State::START_DOCUMENT;
 	Stack<Container, maxNesting> stack;
 
-	bool doEmitWhitespace = false;
-	uint8_t keyLength = 0;
+	uint8_t keyLength = 0;  ///< Length of key, not including NUL terminator
 	uint16_t bufferPos = 0; ///< Current write position in buffer
 
 	char unicodeEscapeBuffer[10];
@@ -169,7 +167,7 @@ private:
 	int unicodeHighSurrogate = 0;
 };
 
-template <size_t BUFSIZE> class StaticStreamingParser : public StreamingParser
+template <uint16_t BUFSIZE> class StaticStreamingParser : public StreamingParser
 {
 public:
 	static_assert(BUFSIZE >= 32, "Buffer too small");

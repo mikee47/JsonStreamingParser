@@ -178,8 +178,6 @@ struct Element {
 	}
 };
 
-static_assert(sizeof(Element) == 20, "Element size incorrect");
-
 } // namespace JSON
 
 String toString(JSON::Element::Type type);

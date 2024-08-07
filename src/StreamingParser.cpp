@@ -34,12 +34,11 @@ namespace JSON
 {
 Status StreamingParser::bufferChar(char c)
 {
-	if(bufferPos >= bufsize - 1) {
+	if(bufferPos + 1 >= bufsize) {
 		return Status::BufferFull;
 	}
 
-	buffer[bufferPos] = c;
-	++bufferPos;
+	buffer[bufferPos++] = c;
 	return Status::Ok;
 }
 
@@ -80,9 +79,8 @@ void StreamingParser::reset()
 
 Status StreamingParser::parse(const char* data, unsigned length)
 {
-	while(length != 0) {
+	while(length--) {
 		auto status = parse(*data++);
-		--length;
 		if(status != Status::Ok) {
 			return status;
 		}
@@ -94,8 +92,7 @@ Status StreamingParser::parse(const char* data, unsigned length)
 Status StreamingParser::parse(Stream& stream)
 {
 	char buffer[64];
-	int len;
-	while((len = stream.readBytes(buffer, sizeof(buffer))) != 0) {
+	while(auto len = stream.readBytes(buffer, sizeof(buffer))) {
 		auto status = parse(buffer, len);
 		if(status != Status::Ok) {
 			return status;
@@ -117,8 +114,7 @@ Status StreamingParser::parse(char c)
 		if(c == '"') {
 			if(state == State::IN_KEY) {
 				keyLength = bufferPos;
-				buffer[bufferPos] = '\0';
-				++bufferPos;
+				buffer[bufferPos++] = '\0';
 				state = State::END_KEY;
 				return Status::Ok;
 			}
@@ -132,8 +128,7 @@ Status StreamingParser::parse(char c)
 			// Unescaped control character encountered
 			return Status::UnescapedControl;
 		}
-		bufferChar(c);
-		return Status::Ok;
+		return bufferChar(c);
 
 	case State::IN_ARRAY:
 		if(isWhiteSpace(c)) {
@@ -162,12 +157,12 @@ Status StreamingParser::parse(char c)
 		if(isWhiteSpace(c)) {
 			return Status::Ok;
 		}
-		if(c != ':') {
-			// Expected ':' after key
-			return Status::ColonExpected;
+		if(c == ':') {
+			state = State::AFTER_KEY;
+			return Status::Ok;
 		}
-		state = State::AFTER_KEY;
-		return Status::Ok;
+		// Expected ':' after key
+		return Status::ColonExpected;
 
 	case State::AFTER_KEY:
 		if(isWhiteSpace(c)) {
@@ -182,8 +177,7 @@ Status StreamingParser::parse(char c)
 		return processUnicodeCharacter(c);
 
 	case State::UNICODE_SURROGATE:
-		unicodeEscapeBuffer[unicodeEscapeBufferPos] = c;
-		unicodeEscapeBufferPos++;
+		unicodeEscapeBuffer[unicodeEscapeBufferPos++] = c;
 		if(unicodeEscapeBufferPos == 2) {
 			return endUnicodeSurrogateInterstitial();
 		}
@@ -204,7 +198,6 @@ Status StreamingParser::parse(char c)
 			// Expected ',' or '}'
 			return Status::CommaOrClosingBraceExpected;
 		}
-
 		if(c == ']') {
 			return endArray();
 		}
@@ -216,7 +209,7 @@ Status StreamingParser::parse(char c)
 		return Status::CommaOrClosingBracketExpected;
 
 	case State::IN_NUMBER: {
-		if(c >= '0' && c <= '9') {
+		if(isdigit(c)) {
 			return bufferChar(c);
 		}
 		if(c == '.') {
@@ -245,14 +238,6 @@ Status StreamingParser::parse(char c)
 			}
 			return bufferChar(c);
 		}
-
-		//float result = 0.0;
-		//if (doesCharArrayContain(buffer, bufferPos, '.')) {
-		//  result = value.toFloat();
-		//} else {
-		// needed special treatment in php, maybe not in Java and c
-		//  result = value.toFloat();
-		//}
 		auto status = startElement(Element::Type::Number);
 		if(status == Status::Ok) {
 			// we have consumed one beyond the end of the number
@@ -315,37 +300,38 @@ Status StreamingParser::parse(char c)
 			return Status::Ok;
 		}
 		return Status::UnexpectedContentAfterDocument;
-
-	default:
-		// Reached an unknown state
-		assert(false);
-		return Status::InternalError;
 	}
 
-	return Status::Ok;
+	// Reached an unknown state
+	assert(false);
+	return Status::InternalError;
 }
 
 Status StreamingParser::startElement(Element::Type type)
 {
 	if(listener != nullptr) {
 		buffer[bufferPos] = '\0';
-		Element elem;
-		elem.param = param;
-		elem.type = type;
-		elem.level = stack.getLevel();
+		Element elem{
+			.param = param,
+			.type = type,
+			.level = stack.getLevel(),
+			.key = buffer,
+			.value = &buffer[keyLength + 1],
+			.keyLength = keyLength,
+		};
 		if(elem.level > 0) {
 			auto& c = stack.peek();
 			elem.container = c;
 			++c.index;
 		}
-		elem.key = buffer;
-		elem.keyLength = keyLength;
-		elem.value = &buffer[keyLength + 1];
-		elem.valueLength = bufferPos - keyLength - 1;
+		if(bufferPos > keyLength) {
+			elem.valueLength = uint16_t(bufferPos - keyLength - 1);
+		}
 		if(!listener->startElement(elem)) {
 			return Status::Cancelled;
 		}
 	}
+
 	state = State::AFTER_VALUE;
 	keyLength = 0;
 	bufferPos = 0;
@@ -354,17 +340,18 @@ Status StreamingParser::startElement(Element::Type type)
 
 Status StreamingParser::endElement(Element::Type type)
 {
-	Status status = Status::Ok;
 	if(listener != nullptr) {
-		Element elem;
-		elem.param = param;
-		elem.type = type;
-		elem.level = stack.getLevel();
+		Element elem{
+			.param = param,
+			.type = type,
+			.level = stack.getLevel(),
+		};
 		if(!listener->endElement(elem)) {
-			status = Status::Cancelled;
+			return Status::Cancelled;
 		}
 	}
-	return status;
+
+	return Status::Ok;
 }
 
 Status StreamingParser::startValue(char c)
@@ -377,27 +364,32 @@ Status StreamingParser::startValue(char c)
 
 	if(c == '[') {
 		return startArray();
-	} else if(c == '{') {
+	}
+	if(c == '{') {
 		return startObject();
-	} else if(c == '"') {
+	}
+	if(c == '"') {
 		state = State::IN_STRING;
 		return Status::Ok;
-	} else if(isdigit(c) || c == '-') {
+	}
+	if(isdigit(c) || c == '-') {
 		state = State::IN_NUMBER;
 		return bufferChar(c);
-	} else if(c == 't') {
+	}
+	if(c == 't') {
 		state = State::IN_TRUE;
 		return bufferChar(c);
-	} else if(c == 'f') {
+	}
+	if(c == 'f') {
 		state = State::IN_FALSE;
 		return bufferChar(c);
-	} else if(c == 'n') {
+	}
+	if(c == 'n') {
 		state = State::IN_NULL;
 		return bufferChar(c);
-	} else {
-		// Unexpected character for value
-		return Status::BadValue;
 	}
+	// Unexpected character for value
+	return Status::BadValue;
 }
 
 Status StreamingParser::endArray()
