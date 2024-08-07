@@ -136,7 +136,7 @@ struct Element {
 		case Type::Number:
 		case Type::String:
 		default:
-			return value ? atoi(value) : 0;
+			return value ? atoll(value) : 0;
 		}
 	}
 
