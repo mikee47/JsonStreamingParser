@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Print.h>
-#include <JSON/StreamingParser.h>
+#include "Listener.h"
+#include <Data/Format/Standard.h>
 
 /**
  * @brief Listener implementation to output formatted JSON to a stream
@@ -20,20 +21,24 @@ public:
 	bool startElement(const Element& element) override
 	{
 		indentLine(element.level);
-		m_puts(element.container.isObject ? "OBJ" : "ARR");
-		m_printf("(%u) ", element.container.index);
+		output << (element.container.isObject ? "OBJ" : "ARR") << '(' << element.container.index << ") ";
+		if(element.keyLength > 0) {
+			output.write(element.key, element.keyLength);
+			output.print(": ");
+		}
+		String value(element.value, element.valueLength);
 		switch(element.type) {
 		case Element::Type::Object:
+			output.println('{');
+			return true;
 		case Element::Type::Array:
-			if(element.keyLength > 0) {
-				output.write(element.key, element.keyLength);
-				output.print(": ");
-			}
-			output.println(element.type == Element::Type::Object ? '{' : '[');
-			break;
-
+			output.println('[');
+			return true;
+		case Element::Type::String:
+			Format::standard.quote(value);
+			[[fallthrough]];
 		default:
-			output << element.key << ": " << toString(element.type) << " = " << element.value << endl;
+			output << toString(element.type) << " = " << value << endl;
 		}
 
 		// Continue parsing
@@ -62,10 +67,7 @@ public:
 private:
 	void indentLine(unsigned level)
 	{
-		auto n = level * 2;
-		char ws[n];
-		memset(ws, ' ', n);
-		m_nputs(ws, n);
+		output << String().pad(level * 2);
 	}
 
 	Print& output;
