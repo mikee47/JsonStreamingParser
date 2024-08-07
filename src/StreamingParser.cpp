@@ -228,11 +228,11 @@ Status StreamingParser::parse(char c)
 				// Cannot have multiple exponents in a number
 				return Status::MultipleExponents;
 			}
-			return bufferChar(c);
+			return bufferChar('e');
 		}
 		if(c == '+' || c == '-') {
 			char last = buffer[bufferPos - 1];
-			if(last != 'e' && last != 'E') {
+			if(last != 'e') {
 				// Can only have '+' or '-' after the 'e' or 'E' in a number
 				return Status::BadExponent;
 			}

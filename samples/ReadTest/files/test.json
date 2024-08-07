@@ -5,7 +5,7 @@
 	],
 	"author": "Anon.",
 	"key with spaces": "value \"with escapes\"",
-	"number 1": "0.12345",
+	"number 1": 0.12345,
 	"number 2": 55e6,
 	"number 3": -1234,
 	"flag 1": true,
