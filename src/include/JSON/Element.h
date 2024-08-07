@@ -86,7 +86,7 @@ struct Element {
 
 	bool keyIs(const FlashString& key) const
 	{
-		return key.equals(this->key, keyLength);
+		return key.equals(this->key, size_t(keyLength));
 	}
 
 	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const
