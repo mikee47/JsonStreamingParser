@@ -21,7 +21,8 @@ public:
 	bool startElement(const Element& element) override
 	{
 		indentLine(element.level);
-		output << (element.container.isObject ? "OBJ" : "ARR") << '(' << element.container.index << ") ";
+		output << element.level << ". " << (element.container.isObject ? "OBJ" : "ARR") << '('
+			   << element.container.index << ") ";
 		if(element.keyLength > 0) {
 			output.write(element.key, element.keyLength);
 			output.print(": ");

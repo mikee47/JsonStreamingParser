@@ -98,6 +98,11 @@ struct Element {
 		return type == Type::Null;
 	}
 
+	bool isContainer() const
+	{
+		return type == Type::Object || type == Type::Array;
+	}
+
 	template <typename T> inline typename std::enable_if<std::is_same<T, const char*>::value, T>::type as() const
 	{
 		switch(type) {
