@@ -313,7 +313,6 @@ Status StreamingParser::startElement(Element::Type type)
 			.type = type,
 			.level = stack.getLevel(),
 			.key = buffer,
-			.value = &buffer[keyLength + 1],
 			.keyLength = keyLength,
 		};
 		if(elem.level > 0) {
@@ -322,7 +321,10 @@ Status StreamingParser::startElement(Element::Type type)
 			++c.index;
 		}
 		if(bufferPos > keyLength) {
+			elem.value = &buffer[keyLength + 1];
 			elem.valueLength = uint16_t(bufferPos - keyLength - 1);
+		} else {
+			elem.value = &buffer[bufferPos];
 		}
 		if(!listener->startElement(elem)) {
 			return Status::Cancelled;
