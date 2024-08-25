@@ -30,6 +30,33 @@
 
 #include "include/JSON/StreamingParser.h"
 
+namespace
+{
+// valid whitespace characters in JSON (from RFC4627 for JSON) include:
+// space, horizontal tab, line feed or new line, and carriage return.
+// thanks:
+// http://stackoverflow.com/questions/16042274/definition-of-whitespace-in-json
+bool isWhiteSpace(char c)
+{
+	return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+}
+
+char convertCodepointToCharacter(uint16_t num)
+{
+	return (num <= 0x7f) ? char(num) : ' ';
+}
+
+unsigned getHexArrayAsDecimal(char hexArray[], unsigned length)
+{
+	unsigned result = 0;
+	for(unsigned i = 0; i < length; i++) {
+		result = (result << 4) | unhex(hexArray[i]);
+	}
+	return result;
+}
+
+} // namespace
+
 namespace JSON
 {
 Status StreamingParser::bufferChar(char c)
@@ -490,48 +517,16 @@ Status StreamingParser::processUnicodeCharacter(char c)
 	if(unicodeBufferPos == 4) {
 		unsigned codepoint = getHexArrayAsDecimal(unicodeBuffer, unicodeBufferPos);
 		return endUnicodeCharacter(codepoint);
-
-		/*if (codepoint >= 0xD800 && codepoint < 0xDC00) {
-        unicodeHighSurrogate = codepoint;
-        unicodeBufferPos = 0;
-        state = State::UNICODE_SURROGATE;
-      } else if (codepoint >= 0xDC00 && codepoint <= 0xDFFF) {
-        if (unicodeHighSurrogate == -1) {
-          // throw new ParsingError($this->_line_number,
-          // $this->_char_number,
-          // "Missing high surrogate for Unicode low surrogate.");
-        }
-        int combinedCodePoint = ((unicodeHighSurrogate - 0xD800) * 0x400) + (codepoint - 0xDC00) + 0x10000;
-        endUnicodeCharacter(combinedCodePoint);
-      } else if (unicodeHighSurrogate != -1) {
-        // throw new ParsingError($this->_line_number,
-        // $this->_char_number,
-        // "Invalid low surrogate following Unicode high surrogate.");
-        endUnicodeCharacter(codepoint);
-      } else {
-        endUnicodeCharacter(codepoint);
-      }*/
 	}
 
 	return Status::Ok;
-}
-
-unsigned StreamingParser::getHexArrayAsDecimal(char hexArray[], unsigned length)
-{
-	unsigned result = 0;
-	for(unsigned i = 0; i < length; i++) {
-		result = (result << 4) | unhex(hexArray[i]);
-	}
-	return result;
 }
 
 Status StreamingParser::endUnicodeSurrogateInterstitial()
 {
 	char unicodeEscape = unicodeEscapeBuffer[unicodeEscapeBufferPos - 1];
 	if(unicodeEscape != 'u') {
-		// throw new ParsingError($this->_line_number, $this->_char_number,
-		// "Expected '\\u' following a Unicode high surrogate. Got: " .
-		// $unicode_escape);
+		// Expected '\\u' following a Unicode high surrogate
 		return Status::BadUnicodeEscapeChar;
 	}
 	unicodeBufferPos = 0;
@@ -546,19 +541,6 @@ Status StreamingParser::endUnicodeCharacter(uint16_t codepoint)
 	unicodeHighSurrogate = -1;
 	state = State::IN_STRING;
 	return bufferChar(convertCodepointToCharacter(codepoint));
-}
-
-char StreamingParser::convertCodepointToCharacter(uint16_t num)
-{
-	if(num <= 0x7F) {
-		return char(num);
-	}
-	// if(num<=0x7FF) return (char)((num>>6)+192) + (char)((num&63)+128);
-	// if(num<=0xFFFF) return
-	// chr((num>>12)+224).chr(((num>>6)&63)+128).chr((num&63)+128);
-	// if(num<=0x1FFFFF) return
-	// chr((num>>18)+240).chr(((num>>12)&63)+128).chr(((num>>6)&63)+128).chr((num&63)+128);
-	return ' ';
 }
 
 } // namespace JSON

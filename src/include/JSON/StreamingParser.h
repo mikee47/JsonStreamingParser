@@ -106,15 +106,6 @@ public:
 private:
 	Status parse(char c);
 
-	// valid whitespace characters in JSON (from RFC4627 for JSON) include:
-	// space, horizontal tab, line feed or new line, and carriage return.
-	// thanks:
-	// http://stackoverflow.com/questions/16042274/definition-of-whitespace-in-json
-	static bool isWhiteSpace(char c)
-	{
-		return (c == ' ' || c == '\t' || c == '\n' || c == '\r');
-	}
-
 	Status bufferChar(char c);
 
 	Status startElement(Element::Type type);
@@ -129,8 +120,6 @@ private:
 
 	Status processEscapeCharacters(char c);
 
-	static char convertCodepointToCharacter(uint16_t num);
-
 	Status endUnicodeCharacter(uint16_t codepoint);
 
 	Status startObject();
@@ -140,8 +129,6 @@ private:
 	Status endUnicodeSurrogateInterstitial();
 
 	bool bufferContains(char c);
-
-	static unsigned getHexArrayAsDecimal(char hexArray[], unsigned length);
 
 	Status processUnicodeCharacter(char c);
 
