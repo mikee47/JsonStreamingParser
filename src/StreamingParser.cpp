@@ -151,7 +151,7 @@ Status StreamingParser::parse(char c)
 			state = State::START_ESCAPE;
 			return Status::Ok;
 		}
-		if((c < 0x1f) || (c == 0x7f)) {
+		if((uint8_t(c) < 0x1f) || (c == 0x7f)) {
 			// Unescaped control character encountered
 			return Status::UnescapedControl;
 		}
@@ -475,7 +475,7 @@ Status StreamingParser::processEscapeCharacters(char c)
 	case '/':
 		break;
 	case 'b':
-		c = 0x08;
+		c = '\b';
 		break;
 	case 'f':
 		c = '\f';
