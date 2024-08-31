@@ -43,7 +43,7 @@ bool isWhiteSpace(char c)
 
 char convertCodepointToCharacter(uint16_t num)
 {
-	return (num <= 0x7f) ? char(num) : ' ';
+	return (num <= 0xff) ? char(num) : ' ';
 }
 
 unsigned getHexArrayAsDecimal(char hexArray[], unsigned length)
