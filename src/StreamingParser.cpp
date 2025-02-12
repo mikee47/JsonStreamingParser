@@ -104,23 +104,26 @@ void StreamingParser::reset()
 	unicodeBufferPos = 0;
 }
 
-Status StreamingParser::parse(const char* data, unsigned length)
+Status StreamingParser::parse(const char* data, unsigned& length)
 {
-	while(length--) {
+	for(unsigned i = 0; i < length; ++i) {
 		auto status = parse(*data++);
 		if(status != Status::Ok) {
+			length = i;
 			return status;
 		}
 	}
 
+	// All characters consumed
 	return Status::Ok;
 }
 
-Status StreamingParser::parse(Stream& stream)
+Status StreamingParser::parse(IDataSourceStream& stream)
 {
 	char buffer[64];
-	while(auto len = stream.readBytes(buffer, sizeof(buffer))) {
+	while(unsigned len = stream.readMemoryBlock(buffer, sizeof(buffer))) {
 		auto status = parse(buffer, len);
+		stream.seek(len);
 		if(status != Status::Ok) {
 			return status;
 		}

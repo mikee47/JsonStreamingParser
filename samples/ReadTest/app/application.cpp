@@ -5,7 +5,7 @@
 
 IMPORT_FSTR(testFile, PROJECT_DIR "/files/test.json")
 
-bool readTest(Stream& input, Print& output)
+bool readTest(IDataSourceStream& input, Print& output)
 {
 	BasicListener listener(output);
 	JSON::StaticStreamingParser<128> parser(&listener);

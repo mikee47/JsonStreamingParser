@@ -33,7 +33,7 @@
 #include "Listener.h"
 #include "Status.h"
 #include "Stack.h"
-#include <Stream.h>
+#include <Data/Stream/DataSourceStream.h>
 
 namespace JSON
 {
@@ -92,9 +92,26 @@ public:
 		this->param = param;
 	}
 
-	Status parse(const char* data, unsigned length);
+	/**
+	 * @brief Parse a chunk of data
+	 * @param data
+	 * @param length IN: Number of characters available to process, OUT: Number of characters consumed
+	 * @retval Status
+	 *
+	 * Not all data may be consumed if an error occurs, or if there is trailing text in the data.
+	 * This may occur if parsing starts midway through a stream.
+	 */
+	Status parse(const char* data, unsigned& length);
 
-	Status parse(Stream& stream);
+	/**
+	 * @brief Parse data from a stream
+	 * @param stream
+	 * @retval Status
+	 *
+	 * Parsing stops when the end of the valid JSON data has been reached.
+	 * The returned status indicates whether this is an error or not.
+	 */
+	Status parse(IDataSourceStream& stream);
 
 	void reset();
 
